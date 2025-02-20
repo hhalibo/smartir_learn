@@ -1,0 +1,34 @@
+{
+    "manufacturer": "",
+    "supportedModels": [
+    ],
+    "supportedController": "Broadlink",
+    "commandsEncoding": "Base64",
+    "speed": [
+        "lowest",
+        "low",
+        "mediumLow",
+        "medium",
+        "mediumHigh",
+        "high"
+    ],
+    "commands": {
+        "off": "",
+        "reverse": {
+            "lowest": "",
+            "low": "",
+            "mediumLow": "",
+            "medium": "",
+            "mediumHigh": "",
+            "high": ""
+        },
+        "forward": {
+            "lowest": "",
+            "low": "",
+            "mediumLow": "",
+            "medium": "",
+            "mediumHigh": "",
+            "high": ""
+        }
+    }
+}

@@ -1,0 +1,26 @@
+{
+    "domain": "smartir_learn",
+    "name": "SmartIR Learn",
+    "version": "1.0.0",
+    "documentation": "https://github.com/custom-components/broadlink_control",
+    "requirements": [
+        "broadlink==0.19.0"
+    ],
+    "dependencies": [
+
+    ],
+    "codeowners": [
+        "@your_github_username"
+    ],
+    "config_flow": true,
+    "translations": [
+        {
+            "language": "en",
+            "path": "translations/en.json"
+        },
+        {
+            "language": "zh-Hans",
+            "path": "translations/zh-Hans.json"
+        }
+    ]
+}

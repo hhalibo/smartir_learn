@@ -1,0 +1,90 @@
+{
+    "title": "SmartIR Code Learning",
+    "steps": {
+        "user": {
+            "title": "Set up Broadlink Device"
+        }
+    },
+    "config": {
+        "step": {
+            "user": {
+                "title": "Set up your device",
+                "description": "Enter your Broadlink device details.",
+                "data": {
+                    "device_ip": "Broadlink device IP address"
+                }
+            },
+            "manual_input": {
+                "title": "Set up your device",
+                "description": "Please enter the device IP address",
+                "data": {
+                    "device_ip": "Broadlink device IP address"
+                }
+            }
+        },
+        "error": {
+            "invalid_device": "Invalid device IP, please try again."
+        },
+        "progress": {
+            "learn_ir_code": "开始学习 {command} 红外码..."
+        }
+    },
+    "options": {
+        "step": {
+            "device_configuration": {
+                "title": "Code Learning Configuration",
+                "description": "Configure the necessary information for your device",
+                "data": {
+                    "type": "Device Type",
+                    "manufacturer": "Manufacturer",
+                    "models": "Models (comma-separated)"
+                }
+            },
+            "template_and_temperature": {
+                "title": "Code Learning Configuration",
+                "description": "Select the temperature range and choose a template {message}",
+                "data": {
+                    "min_temperature": "Minimum Temperature",
+                    "max_temperature": "Maximum Temperature",
+                    "template": "Template"
+                }
+            },
+            "commands_step": {
+                "title": "Learn Command List",
+                "description": "Please select the commands you want to learn",
+                "data": {
+                    "commands": "Commands"
+                }
+            },
+            "select_existing_file": {
+                "title": "Select Existing Template File",
+                "description": "Choose an existing template file or create a new one.",
+                "data": {
+                    "existing_file": "Existing File"
+                }
+            },
+            "receive_ir_code": {
+                "title": "Receive IR Code",
+                "description": "Ensure the device is sending the IR code for {command} and wait for the reception.",
+                "data": {
+                    "command": "Command"
+                }
+            },
+            "learn_ir_code": {
+                "title": "Start Learning IR Code for Command",
+                "description": "Start learning IR code for {command}...",
+                "data": {
+                    "command": "Command"
+                }
+            },
+            "finish": {
+                "title": "Confirmation",
+                "description": "device_code:\n{device_code}\n\nThe SmartIR file will be stored at:\n{file_path}\n{file_contents}",
+                "data": {}
+            }
+        },
+        "progress": {
+            "learn_ir_code": "开始学习 {command} 红外码..."
+        }
+    }
+}

@@ -1,0 +1,63 @@
+{
+    "DEVICE_TEMPLATES": {
+        "climate": [
+            {
+                "label": "Template 1",
+                "value": "climate1.json"
+            },
+            {
+                "label": "Template 2",
+                "value": "climate2.json"
+            }
+        ],
+        "media_player": [
+            {
+                "label": "Template 1",
+                "value": "media1.json"
+            }
+        ],
+        "fan": [
+            {
+                "label": "Template 1",
+                "value": "fan1.json"
+            }
+        ],
+        "light": [
+            {
+                "label": "Template 1",
+                "value": "light1.json"
+            }
+        ]
+    },
+    "COMMAND_REPLACE_MAP": {
+        "climate": {
+            "off": "Off",
+            "cool": "Cool Mode",
+            "heat": "Heat Mode",
+            "dry": "Dry Mode",
+            "fan_only": "Fan Mode",
+            "auto": "Auto Fan Speed",
+            "high": "High Fan Speed",
+            "med": "Medium Fan Speed",
+            "low": "Low Fan Speed",
+            "quiet": "Quiet Fan Speed",
+            "minTemperature-maxTemperature": "Each Temperature"
+        },
+        "fan": {
+            "off": "Off",
+            "lowest": "Lowest",
+            "low": "Low",
+            "mediumLow": "Medium Low",
+            "medium": "Medium",
+            "mediumHigh": "Medium High",
+            "high": "High",
+            "reverse": "Reverse",
+            "forward": "Forward"
+        }
+    },
+    "DEVICE_IP_MODE": {
+        "scan": "scan",
+        "manual": "manual"
+    },
+    "LEARN_TIMEOUT": 30
+}

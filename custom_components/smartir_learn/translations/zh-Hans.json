@@ -1,0 +1,96 @@
+{
+    "title": "SmartIR学码",
+    "steps": {
+        "user": {
+            "title": "设置 Broadlink 设备"
+        }
+    },
+    "config": {
+        "step": {
+            "user": {
+                "title": "设置您的设备",
+                "description": "输入您的 Broadlink 设备详情。",
+                "data": {
+                    "device_ip": "博联设备IP地址"
+                },
+                "value_mapping": {
+                    "device_ip_mode": {
+                        "scan": "自动扫描",
+                        "manual": "手动输入"
+                    }
+                }
+            },
+            "manual_input": {
+                "title": "设置您的设备",
+                "description": "请输入设备IP地址",
+                "data": {
+                    "device_ip": "博联设备IP地址"
+                }
+            }
+        },
+        "error": {
+            "invalid_device": "无效的设备IP，请重试。"
+        }
+    },
+    "options": {
+        "step": {
+            "device_configuration": {
+                "title": "学码配置",
+                "description": "为您的设备配置必要的信息",
+                "data": {
+                    "type": "设备类型",
+                    "manufacturer": "制造商",
+                    "models": "型号（用逗号分隔）"
+                }
+            },
+            "template_and_temperature": {
+                "title": "学码配置",
+                "description": "选择温度范围并选择模板 {message}",
+                "data": {
+                    "min_temperature": "最低温度",
+                    "max_temperature": "最高温度",
+                    "template": "模版"
+                },
+                "value_mapping": {
+                    "template_from_file": "基于SmartIR文件"
+                }
+            },
+            "commands_step": {
+                "title": "学习指令列表",
+                "description": "请勾选需要学习的指令",
+                "data": {
+                    "commands": "指令"
+                }
+            },
+            "select_existing_file": {
+                "title": "选择现有模板文件",
+                "description": "选择一个现有的SmartIR文件。",
+                "data": {
+                    "existing_file": "文件"
+                }
+            },
+            "receive_ir_code": {
+                "title": "接收 IR 码",
+                "description": "请确保设备正在发送 {command} 的 IR 码，并等待接收。",
+                "data": {
+                    "command": "指令"
+                }
+            },
+            "learn_ir_code": {
+                "title": "学习指令红外码",
+                "description": "准备重新学习 {command} 指令的红外码",
+                "data": {
+                    "command": "指令"
+                }
+            },
+            "finish": {
+                "title": "确认信息",
+                "description": "device_code:\n{device_code}\n\nSmartIR文件将存放到：\n{file_path}\n{file_contents}",
+                "data": {}
+            }
+        },
+        "progress": {
+            "learn_ir_code_progres": "请拿起遥控器，按下 {command} 键..."
+        }
+    }
+}

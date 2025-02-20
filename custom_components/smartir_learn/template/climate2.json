@@ -1,0 +1,40 @@
+{
+    "manufacturer": "xxxx",
+    "supportedModels": [
+        "xxxx"
+    ],
+    "commandsEncoding": "Base64",
+    "supportedController": "Broadlink",
+    "minTemperature": 16,
+    "maxTemperature": 32,
+    "precision": 1,
+    "operationModes": [
+        "cool",
+        "heat",
+        "dry",
+        "fan_only"
+    ],
+    "fanModes": [
+        "auto",
+        "high",
+        "med",
+        "low",
+        "quiet"
+    ],
+    "commands": {
+        "off": "1111",
+        "dry": {
+            "auto": {
+                "minTemperature-maxTemperature": "111"
+            },
+            "high": {
+                "minTemperature-maxTemperature": "1111"
+            }
+        },
+        "fan_only": {
+            "auto": {
+                "minTemperature-maxTemperature": "111"
+            }
+        }
+    }
+}

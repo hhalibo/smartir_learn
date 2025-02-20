@@ -1,0 +1,781 @@
+from homeassistant import config_entries
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.translation import async_get_translations
+import voluptuous as vol
+from homeassistant.core import callback
+import broadlink
+import logging
+import json
+import os
+import asyncio
+import time
+import base64
+import datetime
+import uuid
+from broadlink.exceptions import ReadError, StorageError
+
+from .constants import DOMAIN
+from .constants import MOCK_DATA
+from .constants import DEVICE_TYPES
+
+_LOGGER = logging.getLogger(__name__)
+
+
+# Step 1: 进入流时要求输入设备信息，要求用户输入设备名称
+SETUP_SCHEMA = vol.Schema({
+    vol.Required("device_ip"): str,  # 设备名称，必填
+})
+
+# Step 2: 配置时要求输入设备的类型、制造商和型号
+CONFIGURE_SCHEMA = vol.Schema({
+    # 设备类型
+    vol.Required("type"): vol.In(DEVICE_TYPES),
+    # 设备制造商，必填, 逗号分隔
+    vol.Required("manufacturer"): str,
+    # 设备型号，必填
+    vol.Required("models"): str,
+})
+
+# 扫描设备 IP 地址
+def scan_devices():
+    if MOCK_DATA:
+        # 模拟的设备列表
+        devices = [
+            {"name": "Mock Device 1", "ip": "192.168.1.100"},
+            {"name": "Mock Device 2", "ip": "192.168.1.101"},
+            {"name": "Mock Device 3", "ip": "192.168.1.102"},
+        ]
+        return devices
+
+    """扫描设备并返回设备列表"""
+    devices = []
+    for device in broadlink.xdiscover():
+        _LOGGER.debug(f'发现设备: {device}')
+        devices.append({"name": "Device 1", "ip": device.host[0]})
+    return devices
+
+def merge_commands(template_commands, learned_commands, min_temperature=None, max_temperature=None):
+    """递归更新模板命令，处理温度范围并替换"""
+    for key, value in learned_commands.items():
+        keys = key.split('.')
+        current_level = template_commands
+
+        for part in keys[:-1]:
+            if part not in current_level:
+                current_level[part] = {}
+            current_level = current_level[part]
+
+        # 处理温度范围 minTemperature-maxTemperature
+        if "minTemperature-maxTemperature" in current_level:
+            if min_temperature is not None and max_temperature is not None:
+                del current_level["minTemperature-maxTemperature"]
+                # 替换为温度范围中的每个值
+                for temp in range(min_temperature, max_temperature + 1):
+                    current_level[f"{temp}"] = value
+            else:
+                _LOGGER.error("温度范围未设置，无法进行替换！")
+        else:
+            # 正常情况下，覆盖现有命令
+            if isinstance(current_level, dict) and keys[-1] in current_level:
+                current_level[keys[-1]] = value
+
+    return template_commands
+
+# 辅助函数：检查设备 IP 是否有效，并返回设备和错误信息
+def validate_device_ip(ip):
+    if MOCK_DATA:
+        # 设置设备信息（请将这些值替换为您的设备实际信息）
+        ip_address = "192.168.1.100"  # 设备的IP地址
+        mac_address = bytearray.fromhex("aabbccddeeff")  # 设备的MAC地址
+        device_type = 0x5f36  # 您的设备类型编号，需确认
+        # 使用 gendevice 方法创建设备对象
+        device = broadlink.gendevice(device_type, (ip_address, 80), mac_address)
+        return device, None
+
+    """验证设备 IP，返回设备对象和错误信息"""
+    try:
+        device = broadlink.hello(ip)
+        device.auth()
+        _LOGGER.debug(f'设备连接成功: {device}')
+        return device, None  # 设备有效，返回设备和无错误
+    except broadlink.exceptions.NetworkTimeoutError as e:
+        error_message = f"当前设备IP，无法连接，请检查！IP: {ip}，错误详情: {e}"
+        _LOGGER.error(error_message)
+        return None, error_message
+    except broadlink.exceptions.AuthenticationError as e:
+        error_message = f"设备授权失败，请在博联APP设备属性里，关闭“设备上锁”  IP: {ip}，错误详情: {e}"
+        _LOGGER.error(error_message)
+        return None, error_message
+    except OSError as e:
+        error_message = f"IP格式错误，请输入有效的设备 IP 地址"
+        _LOGGER.error(error_message)
+        return None, error_message
+    except Exception as e:
+        error_message = f"连接设备，出现异常！IP: {ip}，错误详情: {e}"
+        _LOGGER.error(error_message)
+        return None, error_message
+
+
+# 获取当前配置语言并生成文件名
+def get_localized_config_path(language):
+    # 拼接文件名为 config.json_语言.json 格式
+    language = language.replace('zh_cn', 'zh')
+    config_file = f"config_{language}.json" if language else "config_en.json"  # 默认为英文配置
+    # 配置文件路径
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', config_file)
+    return config_path
+
+# 异步加载配置文件
+async def load_config(language):
+    """异步加载 JSON 配置文件并返回内容"""
+    file_path = get_localized_config_path(language)
+    if os.path.exists(file_path):
+        return await asyncio.to_thread(read_config_file, file_path)
+
+    file_path = get_localized_config_path('en')
+    if os.path.exists(file_path):
+        return await asyncio.to_thread(read_config_file, file_path)
+
+    raise FileNotFoundError(f"配置文件 {file_path} 未找到！")
+
+def read_config_file(file_path):
+    """同步读取配置文件"""
+    with open(file_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+# 每次调用时直接加载配置
+async def get_device_templates(language):
+    """每次获取设备模板时都从配置文件加载"""
+    config_data = await load_config(language)
+    return config_data.get("DEVICE_TEMPLATES", {})
+
+# 每次调用时直接加载配置
+async def get_device_ip_mode(language):
+    """每次获取设备模板时都从配置文件加载"""
+    config_data = await load_config(language)
+    return config_data.get("DEVICE_IP_MODE", {})
+
+# 每次调用时直接加载配置
+async def get_device_templates(language):
+    """每次获取设备模板时都从配置文件加载，并处理每个模板的value为完整路径"""
+    config_data = await load_config(language)
+    device_templates = config_data.get("DEVICE_TEMPLATES", {})
+
+    # 获取当前文件所在目录
+    current_directory = os.path.dirname(os.path.abspath(__file__))
+    template_directory = os.path.join(current_directory, "template")
+
+    # 遍历所有设备类型，处理每个模板的value为完整路径
+    for device_type, templates in device_templates.items():
+        for template in templates:
+            template["value"] = os.path.join(template_directory, template["value"])
+
+    return device_templates
+
+async def get_command_replace_map(language):
+    """每次获取指令映射时都从配置文件加载"""
+    config_data = await load_config(language)
+    return config_data.get("COMMAND_REPLACE_MAP", {})
+
+async def get_learn_timeout(language):
+    """每次获取学习超时时间时都从配置文件加载"""
+    config_data = await load_config(language)
+    return config_data.get("LEARN_TIMEOUT", {})
+
+def apply_replacement_mapping(cmd, replace_map, device_type):
+    for old, new in replace_map.get(device_type, {}).items():
+        cmd = cmd.replace(old, new)
+    cmd = cmd.replace('.', ' ')
+    return cmd
+
+class SmartirLearnConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    VERSION = 1  # 配置流的版本
+
+    def __init__(self):
+        self.device_ip = None  # 初始化设备IP变量
+
+    async def async_step_user(self, user_input=None):
+        # 异步加载插件的翻译内容 ✅
+        self._translations = await async_get_translations(
+            self.hass,
+            self.hass.config.language,
+            DOMAIN,  # 必须与 manifest.json 中的 "domain" 一致
+            None
+        )
+        _LOGGER.debug(f'异步加载插件的翻译内容结果：{self._translations}')
+        self.device_ip_mode = {
+            "scan": self._translations.get(
+                    f"config.step.user.value_mapping.device_ip_mode.scan", "自动扫描1"
+                ),
+            "manual": self._translations.get(
+                    f"config.step.user.value_mapping.device_ip_mode.manual", "手动输入1"
+                )
+        }
+
+        """用户输入设备 IP 的第一步，支持扫描或手动输入"""
+        errors = {}
+
+        if user_input is not None:
+            device_ip = user_input["device_ip"]
+            if device_ip == "scan":
+                # 用户选择扫描设备 IP 列表
+                devices = scan_devices()
+
+                if not devices:
+                    errors["device_ip"] = "没有找到可用的设备，请检查网络连接或尝试手动输入设备 IP 地址。"
+                    return self.async_show_form(
+                        step_id="user",
+                        data_schema=vol.Schema({
+                            vol.Required("device_ip"): vol.In(self.device_ip_mode)
+                        }),
+                        errors=errors
+                    )
+
+                return self.async_show_form(
+                    step_id="user",
+                    data_schema=vol.Schema({
+                        vol.Required("device_ip"): vol.In([device["ip"] for device in devices])
+                    }),
+                    errors=errors,
+                    description_placeholders={"devices": devices}
+                )
+            elif device_ip == "manual":
+                # 用户选择手动输入设备 IP
+                return await self.async_step_manual_input()
+
+            # 验证设备 IP
+            device, error = validate_device_ip(device_ip)
+            if error:
+                errors["device_ip"] = error  # 如果有错误，显示错误信息
+                return self.async_show_form(
+                    step_id="user",
+                    data_schema=vol.Schema({
+                        vol.Required("device_ip"): vol.In(self.device_ip_mode)
+                    }),
+                    errors=errors
+                )
+
+            # 保存设备 IP
+            self.device_ip = device_ip
+            return self.async_create_entry(
+                title=f'{getattr(device, "name", "Unknown Device")}({self.device_ip})',
+                data={"device_ip": self.device_ip}
+            )
+
+        # 显示表单，要求用户选择扫描或手动输入
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema({
+                vol.Required("device_ip"): vol.In(self.device_ip_mode)
+            }),
+            errors=errors
+        )
+
+    async def async_step_manual_input(self, user_input=None):
+        """用户输入设备 IP 地址的手动输入步骤"""
+        errors = {}
+
+        if user_input is not None:
+            device_ip = user_input["device_ip"]
+            if not device_ip:
+                errors["device_ip"] = "设备 IP 地址不能为空，请输入有效的 IP 地址。"
+            else:
+                # 验证设备 IP
+                device, error = validate_device_ip(device_ip)
+                if error:
+                    errors["device_ip"] = error  # 如果有错误，显示错误信息
+                else:
+                    # 保存设备 IP
+                    self.device_ip = device_ip
+                    return self.async_create_entry(
+                        title=f'{getattr(device, "name", "Unknown Device")}({self.device_ip})',
+                        data={"device_ip": self.device_ip}
+                    )
+
+            return self.async_show_form(
+                step_id="manual_input",
+                data_schema=vol.Schema({
+                    vol.Required("device_ip"): str  # 要求用户输入设备的 IP 地址
+                }),
+                errors=errors
+            )
+
+        # 显示手动输入 IP 地址的表单
+        return self.async_show_form(
+            step_id="manual_input",
+            data_schema=vol.Schema({
+                vol.Required("device_ip"): str  # 要求用户输入设备的 IP 地址
+            }),
+            errors=errors
+        )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        """返回设备配置选项的处理类"""
+        return SmartirLearnOptionsFlowHandler(config_entry)
+
+
+class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
+    progress_task: asyncio.Task | None = None
+
+    def __init__(self, config_entry):
+        self.device_data = dict(config_entry.data)  # 转换成可修改的字典
+
+    async def async_step_init(self, user_input=None):
+        """配置选项流的初始化步骤"""
+        language = self.hass.config.language
+        _LOGGER.debug(f"获取到的国际化语言: {language}")
+
+        # 读取配置文件中的 DEVICE_TEMPLATES 和 COMMAND_REPLACE_MAP
+        self.device_templates = await get_device_templates(language)  # 动态加载设备模板
+        self.command_replace_map = await get_command_replace_map(language)  # 动态加载替换映射
+        self.learn_timeout = await get_learn_timeout(language)
+        
+        _LOGGER.debug(f"获取到的设备模板: {self.device_templates}")
+        _LOGGER.debug(f"获取到的指令映射: {self.command_replace_map}")
+        _LOGGER.debug(f"获取到的学习超时时间配置: {self.learn_timeout}")
+
+        # 异步加载插件的翻译内容 ✅
+        self._translations = await async_get_translations(
+            self.hass,
+            language,
+            DOMAIN,  # 必须与 manifest.json 中的 "domain" 一致
+            None
+        )
+        _LOGGER.debug(f'异步加载插件的翻译内容结果：{self._translations}')
+
+        return await self.async_step_device_configuration()
+
+    async def async_step_device_configuration(self, user_input=None):
+        """设备配置步骤，要求用户输入设备的详细配置"""
+        errors = {}
+
+        if user_input is not None:
+            # 更新设备数据
+            self.device_data.update(user_input)
+
+            # 获取设备 IP，连接设备并保存
+            device_ip = self.device_data.get("device_ip")
+            device, error = validate_device_ip(device_ip)
+            if error:
+                errors["type"] = error
+                return self.async_show_form(
+                    step_id="device_configuration",
+                    data_schema=CONFIGURE_SCHEMA,
+                    errors=errors
+                )
+            # 保存设备对象到上下文
+            self.device = device
+            # 检查是否存在 smartir 目录
+            self.exists_smartir_directory = os.path.exists(self.get_smartir_directory())
+            return await self.async_step_template_and_temperature()
+
+        return self.async_show_form(
+            step_id="device_configuration",
+            data_schema=CONFIGURE_SCHEMA,
+            errors=errors
+        )
+
+    def get_smartir_directory(self):
+            """获取 SmartIR 目录路径"""
+            current_directory = os.path.dirname(os.path.abspath(__file__))
+            parent_directory = os.path.dirname(current_directory)
+            smartir_directory = os.path.join(parent_directory, "smartir")
+            return smartir_directory
+    
+    async def async_step_template_and_temperature(self, user_input=None):
+        """模板选择和温度范围设置步骤，基于设备类型动态展示模板"""
+        errors = {}
+
+        device_type = self.device_data.get("type")
+        # 加载模版
+        templates = self.device_templates.get(device_type, [])
+
+        # 添加“参照现有文件”的选项
+        if user_input is not None and user_input.get("template") == self._translations.get(
+                    f"options.template_and_temperature.value_mapping.template_from_file", 
+                    "基于SmartIR文件1"
+                ):
+            # 进入参照现有文件的流程
+            return await self.async_step_select_existing_file()
+
+        if device_type == "climate":
+            # 温度范围设置，仅用于 climate 类型设备
+            temperature_schema = {
+                vol.Required("min_temperature", default=16): vol.All(int, vol.Range(min=16, max=32)),
+                vol.Required("max_temperature", default=32): vol.All(int, vol.Range(min=16, max=32)),
+            }
+        else:
+            temperature_schema = {}
+
+        # 如果没有选择“参照现有文件”，继续原来流程
+        if user_input is not None:
+            selected_template_label = user_input["template"]
+            selected_template_value = next(
+                (template["value"] for template in templates if template["label"] == selected_template_label),
+                None
+            )
+            self.device_data["template"] = selected_template_value
+
+            if device_type == "climate":
+                self.device_data["min_temperature"] = user_input["min_temperature"]
+                self.device_data["max_temperature"] = user_input["max_temperature"]
+
+            # 调用方法读取模板文件内容，并准备选择指令
+            return await self.async_step_commands_step()
+
+        return self.async_show_form(
+            step_id="template_and_temperature",
+            description_placeholders={
+                "message": f"\n\n<span style='color:red;'><b>!!!注意：检测到未安装SmartIR插件，请先安装再使用！</b></span>" if not self.exists_smartir_directory else ''
+            },
+            data_schema=vol.Schema({
+                vol.Required("template"): vol.In([template["label"] for template in templates] + [self._translations.get(
+                    f"options.template_and_temperature.value_mapping.template_from_file", 
+                    "基于SmartIR文件1"
+                )]),
+                **temperature_schema
+            }),
+            errors=errors
+        )
+
+    async def async_step_select_existing_file(self, user_input=None):
+        """展示现有文件供用户选择"""
+        errors = {}
+
+        if user_input is not None:
+            selected_file = user_input.get("existing_file")
+            if selected_file:
+                self.device_data["template"] = selected_file
+                _LOGGER.info(f"指定模板全路径: {self.device_data["template"]}")
+                return await self.async_step_commands_step()
+
+        # 获取现有文件列表（假设文件存放在特定目录）
+        existing_files = self.get_existing_files_list()
+        _LOGGER.debug(f'获取到的文件列表：{existing_files}')
+
+        return self.async_show_form(
+            step_id="select_existing_file",
+            data_schema=vol.Schema({
+                vol.Required("existing_file"): vol.In(existing_files),
+            }),
+            errors=errors
+        )
+
+    def get_existing_files_list(self):
+        """获取现有文件列表，并返回map格式，key为文件全路径，value为文件名"""
+        
+        # 获取所有文件并以map格式返回
+        existing_files = {}
+
+        # 获取当前文件的路径
+        current_directory = os.path.dirname(os.path.abspath(__file__))
+        # 获取上一级目录并连接到目标路径
+        parent_directory = os.path.dirname(current_directory)
+        target_directory = os.path.join(parent_directory, "smartir", "codes", self.device_data.get("type", "").lower())
+        
+        # 目标目录不存在，就直接返回
+        if not os.path.exists(target_directory):
+            return existing_files
+        
+        # 获取目录中的所有文件并按文件名排序
+        for file in sorted(os.listdir(target_directory)):
+            if file.endswith(".json"):
+                full_path = os.path.join(target_directory, file)
+                existing_files[full_path] = file
+        
+        return existing_files
+
+    async def async_step_commands_step(self, user_input=None):
+        """展示所有指令并选择指令进行学习"""
+        errors = {}
+        template_file_name = self.device_data.get("template")
+
+        if template_file_name:
+            try:
+                template_data = await asyncio.to_thread(self._read_template_file, template_file_name)
+                _LOGGER.debug(f"读取模板数据成功: {template_data}")
+
+                self.device_data["commands"] = template_data.get("commands", {})
+                all_commands = self.extract_commands(self.device_data["commands"])
+
+                if user_input is not None:
+                    selected_commands = user_input.get("commands", [])
+                    # 处理选中的指令，展开其中的温度指令
+                    selected_commands = self.expand_selected_temperature_commands(selected_commands)
+                    _LOGGER.debug(f"需要学习的指令列表：{selected_commands}")
+                    self.device_data["selected_commands"] = selected_commands
+
+                    # 如果有指令，跳转到学习 IR 码步骤
+                    return await self.async_step_learn_ir_code()
+
+                commands_select = {cmd: apply_replacement_mapping(cmd, self.command_replace_map, self.device_data.get("type")) for cmd in all_commands}
+                return self.async_show_form(
+                    step_id="commands_step",
+                    data_schema=vol.Schema({
+                        vol.Required("commands", default=all_commands): cv.multi_select(commands_select)
+                    }),
+                    errors=errors
+                )
+            except FileNotFoundError:
+                _LOGGER.error(f"模板文件 {template_file_name} 未找到！")
+                errors["commands"] = "模板文件读取失败，可能不存在该文件。"
+
+        return self.async_show_form(
+            step_id="commands_step",
+            errors=errors
+        )
+
+    def expand_selected_temperature_commands(self, selected_commands):
+        """展开用户选中的温度指令，保留前缀并生成相应的命令"""
+        expanded_commands = []
+
+        for command in selected_commands:
+            # 检查指令是否包含温度范围
+            if "minTemperature" in command and "maxTemperature" in command:
+                # 提取 minTemperature 和 maxTemperature 的值
+                min_temp = self.device_data.get("min_temperature", 16)
+                max_temp = self.device_data.get("max_temperature", 32)
+                # 为每个温度生成一个新的指令
+                for temp in range(min_temp, max_temp + 1):
+                    command = command.replace(".minTemperature-maxTemperature", "")
+                    expanded_commands.append(f"{command}.{temp}")
+            else:
+                expanded_commands.append(command)
+
+        return expanded_commands
+
+    async def async_step_learn_ir_code(self, user_input=None):
+        """展示指令并等待学习 IR 码"""
+        errors = {}
+
+        # 获取当前指令
+        selected_commands = self.device_data.get("selected_commands", [])
+        if selected_commands:
+            command = selected_commands[0]  # 获取第一个未学习的指令
+            self.device_data["current_command"] = command
+            command_name = apply_replacement_mapping(command, self.command_replace_map, self.device_data.get("type"))
+            self.device_data["current_command_name"] = command_name
+            _LOGGER.debug(f"准备开始学习 IR 码：{command_name}")
+            self.progress_task = None
+            return await self.async_step_learn_ir_code_progres()
+
+        # 如果没有指令需要学习，跳转到完成步骤
+        return await self.async_step_finish()
+
+
+    async def async_step_learn_ir_code_progres(self, user_input=None):
+        current_command_name = self.device_data.get("current_command_name")
+        if self.progress_task is None:
+            # 创建一个异步任务来执行 IR 码学习
+            self.progress_task = self.hass.async_create_task(self.async_step_receive_ir_code())
+
+        if not self.progress_task.done():
+            # 使用 async_show_progress 来显示进度条
+            return self.async_show_progress(
+                step_id=f"learn_ir_code_progres",
+                progress_action=f"learn_ir_code_progres",  # 传递任务名称
+                progress_task=self.progress_task,  # 传递任务对象
+                description_placeholders={
+                    "command": f'<b>{current_command_name}</b>'
+                },
+            )
+
+        if getattr(self, 'error', None):
+            return self.async_show_progress_done(next_step_id="learn_ir_code_fail")
+
+        return self.async_show_progress_done(next_step_id="learn_ir_code")
+
+    async def async_step_learn_ir_code_fail(self, user_input=None):
+        errors = {}
+        command_name = self.device_data["current_command_name"]
+        errors["command"] = self.error
+
+        return self.async_show_form(
+            step_id="learn_ir_code",
+            description_placeholders={"command": f'<b>{command_name}</b>'},
+            data_schema=vol.Schema({
+                vol.Optional("command", default=command_name): str
+            }),
+            errors=errors
+        )
+
+    async def async_step_receive_ir_code(self, user_input=None):
+        """接收 IR 码并将其保存到 device_data"""
+        errors = {}
+
+        # 从 device_data 获取当前要学习的指令
+        current_command = self.device_data.get("current_command")
+
+        if current_command:
+            _LOGGER.info(f"开始接收 {current_command} 的 IR 码...")
+
+            try:
+                # 调用 receive_ir_code 方法来接收 IR 码
+                ir_code = await self.receive_ir_code()
+
+                if ir_code:
+                    _LOGGER.info(f"接收到 {current_command} 的 IR 码: {ir_code}")
+
+                    # 将 IR 码存储到设备数据中
+                    if "ir_codes" not in self.device_data:
+                        self.device_data["ir_codes"] = {}
+                    self.device_data["ir_codes"][current_command] = ir_code
+
+                    # 移除已学习的指令
+                    remaining_commands = self.device_data["selected_commands"][1:]  # 移除当前指令
+                    self.device_data["selected_commands"] = remaining_commands
+                    return ir_code, None
+                else:
+                    self.error = f"未能接收到 IR 码，请重试。"
+            except broadlink.exceptions.NetworkTimeoutError as e:
+                self.error = f"接收 IR 码超时, 请确认遥控器是否按了需要学习的按钮"
+            except Exception as e:
+                self.error = f"接收 IR 码时发生未知错误: {e}"
+                _LOGGER.error(e)
+
+        # 如果有错误，返回错误信息
+        return None, self.error
+
+    async def receive_ir_code(self):
+        """
+        进入学习模式并等待红外命令。
+        """
+        if MOCK_DATA:
+            """模拟接收 IR 码"""
+            await asyncio.sleep(3)  # 模拟等待接收 IR 码的时间
+            return f"IR_CODE_{uuid.uuid4().hex}"  # 返回模拟的 IR 码
+            #raise Exception("I know python!")
+        
+        self.device.enter_learning()  # 设备进入学习模式
+        start = time.time()
+        while time.time() - start < self.learn_timeout:  # 在超时时间内循环尝试获取数据
+            await asyncio.sleep(0.1)
+            try:
+                # 如果获取到数据，则返回Base64编码后的命令数据
+                return base64.b64encode(self.device.check_data()).decode('ascii')
+            except (ReadError, StorageError):
+                # 如果读取数据或存储出现异常，则继续尝试
+                continue
+        else:
+            _LOGGER.error("No data received...")  # 超时未获取到数据，输出提示信息
+            raise broadlink.exceptions.NetworkTimeoutError("Failed to receive IR data within timeout period.")
+
+    async def async_step_finish(self, user_input=None):
+        """显示所有接收到的 IR 码，保存配置，并完成设置。"""
+        ir_codes = self.device_data.get("ir_codes", {})
+        template_file_name = self.device_data.get("template")
+
+        if user_input is not None:
+            # 保存文件
+            await asyncio.to_thread(self._save_configuration_file, self.saved_file_path, self.configuration_json)
+            _LOGGER.info(f"配置文件已保存: {self.saved_file_path}")
+            return self.async_create_entry(
+                    title="设备配置完成",
+                    data={}
+                )
+
+        if ir_codes and template_file_name:
+            try:
+                # 读取模板文件
+                template_data = await asyncio.to_thread(self._read_template_file,template_file_name)
+                _LOGGER.debug(f"成功读取模板数据: {template_data}")
+
+                # 更新模板数据
+                template_data["manufacturer"] = self.device_data.get("manufacturer", "Unknown")
+                template_data["supportedModels"] = [item.strip() for item in self.device_data.get("models", "Unknown").split(",")]
+
+                # 合并学习到的 IR 码到模板命令中
+                merged_commands = merge_commands(
+                    template_data.get("commands", {}),
+                    ir_codes,
+                    min_temperature=self.device_data.get("min_temperature", 16),
+                    max_temperature=self.device_data.get("max_temperature", 32)
+                )
+                template_data["commands"] = merged_commands
+
+                # 如果设备类型是 climate，更新温度范围
+                if self.device_data.get("type") == "climate":
+                    template_data["minTemperature"] = self.device_data.get("min_temperature", 16)
+                    template_data["maxTemperature"] = self.device_data.get("max_temperature", 32)
+
+                # 转换为 JSON 字符串
+                self.configuration_json = json.dumps(template_data, indent=2)
+                _LOGGER.info(f"学习到的所有 IR 码并生成的配置: {self.configuration_json}")
+                # 保存配置到文件
+                self.file_base_name, self.saved_file_path = self._get_configuration_file_path()
+
+                # 在表单中显示保存的文件内容和路径
+                return self.async_show_form(
+                    step_id="finish",
+                    description_placeholders={
+                        "file_path": f'`{self.saved_file_path}`',
+                        "device_code": f'`{self.file_base_name}`',
+                        "file_contents": f'```\n{self.configuration_json}\n```'
+                    },
+                    data_schema=vol.Schema({
+
+                    }),
+                    errors={},
+                    last_step=True
+                )
+            except FileNotFoundError:
+                _LOGGER.error(f"模板文件 {template_file_name} 未找到！ 路径：{template_file_name}")
+
+        # 如果没有学习到 IR 码，记录错误信息
+        _LOGGER.error("未能学习到任何 IR 码")
+
+        return self.async_show_form(
+            step_id="finish",
+            description_placeholders={"message": "未能学习到任何 IR 码"},
+            data_schema=vol.Schema({
+                
+            }),
+            errors={},
+            last_step=True
+        )
+
+    def _save_configuration_file(self, file_path, configuration_json):
+        # 将配置写入到文件
+        with open(file_path, 'w', encoding='utf-8') as file:
+            file.write(configuration_json)
+
+        return file_path
+    
+    def _get_configuration_file_path(self):
+        file_base_name = datetime.datetime.now().strftime("%Y%m%d%H%M")
+        file_name = f"{file_base_name}.json"
+        
+        # 获取当前文件的路径
+        current_directory = os.path.dirname(os.path.abspath(__file__))
+        
+        # 获取上一级目录并连接到目标路径
+        parent_directory = os.path.dirname(current_directory)
+        target_directory = os.path.join(parent_directory, "smartir", "codes", self.device_data.get("type", "").lower())
+        
+        # 确保目标目录存在
+        if not os.path.exists(target_directory):
+            os.makedirs(target_directory)
+
+        file_path = os.path.join(target_directory, file_name)
+        return file_base_name, file_path
+
+
+    def _read_template_file(self, template_path):
+        """同步读取模板文件的内容"""
+        with open(template_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+    def extract_commands(self, commands, parent_key=""):
+        """递归提取所有指令名称"""
+        all_commands = []
+        for key, value in commands.items():
+            current_key = f"{parent_key}.{key}" if parent_key else key
+            if isinstance(value, dict):
+                all_commands.extend(self.extract_commands(value, current_key))
+            else:
+                all_commands.append(current_key)
+
+        #_LOGGER.debug(f"当前提取的指令: {all_commands}")
+        return all_commands

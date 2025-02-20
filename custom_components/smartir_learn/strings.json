@@ -1,0 +1,65 @@
+{
+    "title": "SmartIR学码",
+    "steps": {
+        "user": {
+            "title": "设置 Broadlink 设备"
+        }
+    },
+    "config": {
+        "step": {
+            "user": {
+                "title": "设置您的设备",
+                "description": "输入您的 Broadlink 设备详情。",
+                "data": {
+                    "device_ip": "博联设备IP地址"
+                }
+            }
+        },
+        "error": {
+            "invalid_device": "无效的设备IP，请重试。"
+        }
+    },
+    "options": {
+        "step": {
+            "device_configuration": {
+                "title": "学码配置",
+                "description": "",
+                "data": {
+                    "type": "设备类型",
+                    "manufacturer": "制造商",
+                    "models": "型号（用逗号分隔）"
+                }
+            },
+            "template_and_temperature": {
+                "title": "学码配置",
+                "description": "",
+                "data": {
+                    "min_temperature": "最低温度",
+                    "max_temperature": "最高温度",
+                    "template": "模版"
+                }
+            },
+            "commands_step": {
+                "title": "学习指令列表",
+                "description": "请勾选需要学习的指令",
+                "data": {
+                    "commands": "指令"
+                }
+            },
+            "learn_ir_code": {
+                "title": "开始学习指令红外码",
+                "description": "开始学习 {command} 红外码...",
+                "data": {
+                    "command": "指令"
+                }
+            },
+            "finish": {
+                "title": "完成信息",
+                "description": "device_code:\n{device_code}\n\nSmartIR文件已存放到：\n{file_path}\n{file_contents}",
+                "data": {
+                    "file_contents": "SmartIR文件内容"
+                }
+            }
+        }
+    }
+}
