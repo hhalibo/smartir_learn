@@ -441,7 +441,9 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
                     await asyncio.to_thread(os.remove, selected_file)
                     _LOGGER.info(f"File {selected_file} deleted successfully.")
                     return await self.async_step_select_existing_file()
-
+                if self.template_deal_mode == 'view':
+                    return await self.async_step_view_smartir_content()
+                
                 return await self.async_step_commands_step()
 
         # 获取现有文件列表（假设文件存放在特定目录）
@@ -456,6 +458,23 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required("template_deal_mode", default="ref"): vol.In(template_deal_mode_map),
             }),
             errors=errors
+        )
+
+    async def async_step_view_smartir_content(self, user_input=None):
+        if user_input is not None:
+            return await self.async_step_select_existing_file()
+        
+        template_file_path = self.device_data.get("template")
+        # 读取模板文件
+        template_data = await asyncio.to_thread(self._read_template_file,template_file_path)
+        template_data_json = json.dumps(template_data, indent=2)
+
+        return self.async_show_form(
+            step_id="view_smartir_content",
+            description_placeholders={
+                "file_contents": f'```\n{template_data_json}\n```'
+            },
+            errors={}
         )
 
     async def get_existing_files_list(self):
