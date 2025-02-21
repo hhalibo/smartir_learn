@@ -12,12 +12,6 @@
                 "description": "输入您的 Broadlink 设备详情。",
                 "data": {
                     "device_ip": "博联设备IP地址"
-                },
-                "value_mapping": {
-                    "device_ip_mode": {
-                        "scan": "自动扫描",
-                        "manual": "手动输入"
-                    }
                 }
             },
             "manual_input": {
@@ -50,9 +44,6 @@
                     "min_temperature": "最低温度",
                     "max_temperature": "最高温度",
                     "template": "模版"
-                },
-                "value_mapping": {
-                    "template_from_file": "基于SmartIR文件"
                 }
             },
             "commands_step": {
@@ -86,11 +77,61 @@
             "finish": {
                 "title": "确认信息",
                 "description": "device_code:\n{device_code}\n\nSmartIR文件将存放到：\n{file_path}\n{file_contents}",
-                "data": {}
+                "data": {
+
+                }
             }
         },
         "progress": {
             "learn_ir_code_progres": "请拿起遥控器，按下 {command} 键..."
+        }
+    },
+    "common": {
+        "device_ip_mode": {
+            "scan": "自动扫描",
+            "manual": "手动输入"
+        },
+        "template_from_file": "基于SmartIR文件",
+        "command_replace_map": {
+            "climate": {
+                "off": "关闭",
+                "cool": "制冷模式",
+                "heat": "加热模式",
+                "dry": "除湿模式",
+                "fan_only": "风扇模式",
+                "auto": "风速自动",
+                "high": "风速高风",
+                "med": "风速中风",
+                "low": "风速低风",
+                "quiet": "风速静音",
+                "minTemperature-maxTemperature": "各个温度"
+            },
+            "fan": {
+                "off": "关闭",
+                "lowest": "最低",
+                "low": "低",
+                "mediumLow": "中低",
+                "medium": "中",
+                "mediumHigh": "中高",
+                "high": "高",
+                "reverse": "反向",
+                "forward": "正向"
+            }
+        },
+        "device_templates": {
+            "climate": {
+                "默认模版1": "climate1.json",
+                "调试模版": "climate2.json"
+            },
+            "media_player": {
+                "默认模版1": "media1.json"
+            },
+            "fan": {
+                "默认模版1": "fan1.json"
+            },
+            "light": {
+                "默认模版1": "light1.json"
+            }
         }
     }
 }
