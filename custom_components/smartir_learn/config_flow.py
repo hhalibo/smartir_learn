@@ -17,6 +17,11 @@ from broadlink.exceptions import ReadError, StorageError
 from .constants import DOMAIN
 from .constants import MOCK_DATA
 from .constants import DEVICE_TYPES
+from .constants import LEARN_TIMEOUT
+from .constants import TRANSLATION_KEY_DEVICE_IP_MODE
+from .constants import TRANSLATION_KEY_TEMPLATE_FROM_FILE
+from .constants import TRANSLATION_KEY_COMMAND_REPLACE_MAP
+from .constants import TRANSLATION_KEY_DEVICE_TEMPLATES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -115,72 +120,47 @@ def validate_device_ip(ip):
         _LOGGER.error(error_message)
         return None, error_message
 
-
-# 获取当前配置语言并生成文件名
-def get_localized_config_path(language):
-    # 拼接文件名为 config.json_语言.json 格式
-    language = language.replace('zh_cn', 'zh')
-    config_file = f"config_{language}.json" if language else "config_en.json"  # 默认为英文配置
-    # 配置文件路径
-    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', config_file)
-    return config_path
-
-# 异步加载配置文件
-async def load_config(language):
-    """异步加载 JSON 配置文件并返回内容"""
-    file_path = get_localized_config_path(language)
-    if os.path.exists(file_path):
-        return await asyncio.to_thread(read_config_file, file_path)
-
-    file_path = get_localized_config_path('en')
-    if os.path.exists(file_path):
-        return await asyncio.to_thread(read_config_file, file_path)
-
-    raise FileNotFoundError(f"配置文件 {file_path} 未找到！")
-
-def read_config_file(file_path):
-    """同步读取配置文件"""
-    with open(file_path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-# 每次调用时直接加载配置
-async def get_device_templates(language):
-    """每次获取设备模板时都从配置文件加载"""
-    config_data = await load_config(language)
-    return config_data.get("DEVICE_TEMPLATES", {})
+def extract_prefixed_data(data, prefix):
+    """递归提取嵌套字典中以给定前缀开头的键值对，并格式化为新的字典。"""
+    def recursive_extract(source, current_prefix):
+        result = {}
+        for key, value in source.items():
+            if key.startswith(current_prefix):
+                # 提取前缀和点号之后的部分
+                new_key = key[len(current_prefix) + 1:]  # +1以跳过点号
+                if '.' in new_key:
+                    # 如果新键中还包含点号，处理为嵌套结构
+                    first_part, rest_part = new_key.split('.', 1)
+                    if first_part not in result:
+                        result[first_part] = {}
+                    if isinstance(value, dict):
+                        # 如果值是字典，递归处理
+                        nested_result = recursive_extract(value, current_prefix + '.' + first_part)
+                        result[first_part].update(nested_result)
+                    else:
+                        # 处理那些值不是字典的情况
+                        result[first_part][rest_part] = value
+                else:
+                    # 如果新键中没有点号，作为普通键处理
+                    result[new_key] = value
+        return result
+    
+    return recursive_extract(data, prefix)
 
 # 每次调用时直接加载配置
-async def get_device_ip_mode(language):
-    """每次获取设备模板时都从配置文件加载"""
-    config_data = await load_config(language)
-    return config_data.get("DEVICE_IP_MODE", {})
-
-# 每次调用时直接加载配置
-async def get_device_templates(language):
-    """每次获取设备模板时都从配置文件加载，并处理每个模板的value为完整路径"""
-    config_data = await load_config(language)
-    device_templates = config_data.get("DEVICE_TEMPLATES", {})
-
+def get_device_templates(data):
     # 获取当前文件所在目录
     current_directory = os.path.dirname(os.path.abspath(__file__))
     template_directory = os.path.join(current_directory, "template")
 
-    # 遍历所有设备类型，处理每个模板的value为完整路径
-    for device_type, templates in device_templates.items():
-        for template in templates:
-            template["value"] = os.path.join(template_directory, template["value"])
-
-    return device_templates
-
-async def get_command_replace_map(language):
-    """每次获取指令映射时都从配置文件加载"""
-    config_data = await load_config(language)
-    return config_data.get("COMMAND_REPLACE_MAP", {})
-
-async def get_learn_timeout(language):
-    """每次获取学习超时时间时都从配置文件加载"""
-    config_data = await load_config(language)
-    return config_data.get("LEARN_TIMEOUT", {})
+    for key, value in data.items():
+        if isinstance(value, dict):
+            # 递归调用函数处理嵌套的字典
+            get_device_templates(value)
+        else:
+            # 更新文件路径
+            data[key] = f"{template_directory}/{value}"
+    return data
 
 def apply_replacement_mapping(cmd, replace_map, device_type):
     for old, new in replace_map.get(device_type, {}).items():
@@ -194,23 +174,21 @@ class SmartirLearnConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self):
         self.device_ip = None  # 初始化设备IP变量
 
-    async def async_step_user(self, user_input=None):
-        # 异步加载插件的翻译内容 ✅
+    async def async_fetch_translations(self) -> None:
+        """Fetch translations."""
         self._translations = await async_get_translations(
             self.hass,
             self.hass.config.language,
-            DOMAIN,  # 必须与 manifest.json 中的 "domain" 一致
-            None
+            "common",
+            [DOMAIN],
         )
+
+    async def async_step_user(self, user_input=None):
+        # 异步加载插件的翻译内容
+        await self.async_fetch_translations()
+
         _LOGGER.debug(f'异步加载插件的翻译内容结果：{self._translations}')
-        self.device_ip_mode = {
-            "scan": self._translations.get(
-                    f"config.step.user.value_mapping.device_ip_mode.scan", "自动扫描1"
-                ),
-            "manual": self._translations.get(
-                    f"config.step.user.value_mapping.device_ip_mode.manual", "手动输入1"
-                )
-        }
+        self.device_ip_mode = extract_prefixed_data(self._translations, TRANSLATION_KEY_DEVICE_IP_MODE)
 
         """用户输入设备 IP 的第一步，支持扫描或手动输入"""
         errors = {}
@@ -322,28 +300,30 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry):
         self.device_data = dict(config_entry.data)  # 转换成可修改的字典
 
+    async def async_fetch_translations(self) -> None:
+        """Fetch translations."""
+        self._translations = await async_get_translations(
+            self.hass,
+            self.hass.config.language,
+            "common",
+            [DOMAIN],
+        )
+
     async def async_step_init(self, user_input=None):
         """配置选项流的初始化步骤"""
+        # 异步加载插件的翻译内容
+        await self.async_fetch_translations()
+        _LOGGER.debug(f'异步加载插件的翻译内容结果：{self._translations}')
+
         language = self.hass.config.language
         _LOGGER.debug(f"获取到的国际化语言: {language}")
 
         # 读取配置文件中的 DEVICE_TEMPLATES 和 COMMAND_REPLACE_MAP
-        self.device_templates = await get_device_templates(language)  # 动态加载设备模板
-        self.command_replace_map = await get_command_replace_map(language)  # 动态加载替换映射
-        self.learn_timeout = await get_learn_timeout(language)
+        self.device_templates = get_device_templates(extract_prefixed_data(self._translations, TRANSLATION_KEY_DEVICE_TEMPLATES))
+        self.command_replace_map = extract_prefixed_data(self._translations, TRANSLATION_KEY_COMMAND_REPLACE_MAP)
         
         _LOGGER.debug(f"获取到的设备模板: {self.device_templates}")
         _LOGGER.debug(f"获取到的指令映射: {self.command_replace_map}")
-        _LOGGER.debug(f"获取到的学习超时时间配置: {self.learn_timeout}")
-
-        # 异步加载插件的翻译内容 ✅
-        self._translations = await async_get_translations(
-            self.hass,
-            language,
-            DOMAIN,  # 必须与 manifest.json 中的 "domain" 一致
-            None
-        )
-        _LOGGER.debug(f'异步加载插件的翻译内容结果：{self._translations}')
 
         return await self.async_step_device_configuration()
 
@@ -389,19 +369,16 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
         errors = {}
 
         device_type = self.device_data.get("type")
-        # 加载模版
-        templates = self.device_templates.get(device_type, [])
+        # 加载模板
+        templates = self.device_templates.get(device_type, {})
 
-        # 添加“参照现有文件”的选项
-        if user_input is not None and user_input.get("template") == self._translations.get(
-                    f"options.template_and_temperature.value_mapping.template_from_file", 
-                    "基于SmartIR文件1"
-                ):
-            # 进入参照现有文件的流程
+        # 添加“TRANSLATION_KEY_TEMPLATE_FROM_FILE”的选项
+        if user_input is not None and user_input.get("template") == self._translations.get(TRANSLATION_KEY_TEMPLATE_FROM_FILE):
+            # 进入TRANSLATION_KEY_TEMPLATE_FROM_FILE的流程
             return await self.async_step_select_existing_file()
 
+        # 温度范围设置，仅用于 climate 类型设备
         if device_type == "climate":
-            # 温度范围设置，仅用于 climate 类型设备
             temperature_schema = {
                 vol.Required("min_temperature", default=16): vol.All(int, vol.Range(min=16, max=32)),
                 vol.Required("max_temperature", default=32): vol.All(int, vol.Range(min=16, max=32)),
@@ -409,13 +386,9 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
         else:
             temperature_schema = {}
 
-        # 如果没有选择“参照现有文件”，继续原来流程
         if user_input is not None:
             selected_template_label = user_input["template"]
-            selected_template_value = next(
-                (template["value"] for template in templates if template["label"] == selected_template_label),
-                None
-            )
+            selected_template_value = templates.get(selected_template_label)
             self.device_data["template"] = selected_template_value
 
             if device_type == "climate":
@@ -431,10 +404,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
                 "message": f"\n\n<span style='color:red;'><b>!!!注意：检测到未安装SmartIR插件，请先安装再使用！</b></span>" if not self.exists_smartir_directory else ''
             },
             data_schema=vol.Schema({
-                vol.Required("template"): vol.In([template["label"] for template in templates] + [self._translations.get(
-                    f"options.template_and_temperature.value_mapping.template_from_file", 
-                    "基于SmartIR文件1"
-                )]),
+                vol.Required("template"): vol.In(list(templates.keys()) + [self._translations.get(TRANSLATION_KEY_TEMPLATE_FROM_FILE)]),
                 **temperature_schema
             }),
             errors=errors
@@ -644,13 +614,13 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
         """
         if MOCK_DATA:
             """模拟接收 IR 码"""
-            await asyncio.sleep(3)  # 模拟等待接收 IR 码的时间
+            await asyncio.sleep(1)  # 模拟等待接收 IR 码的时间
             return f"IR_CODE_{uuid.uuid4().hex}"  # 返回模拟的 IR 码
             #raise Exception("I know python!")
         
         self.device.enter_learning()  # 设备进入学习模式
         start = time.time()
-        while time.time() - start < self.learn_timeout:  # 在超时时间内循环尝试获取数据
+        while time.time() - start < LEARN_TIMEOUT:  # 在超时时间内循环尝试获取数据
             await asyncio.sleep(0.1)
             try:
                 # 如果获取到数据，则返回Base64编码后的命令数据
