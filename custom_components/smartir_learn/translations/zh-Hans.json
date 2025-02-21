@@ -118,20 +118,9 @@
                 "forward": "正向"
             }
         },
-        "device_templates": {
-            "climate": {
-                "默认模版1": "climate1.json",
-                "调试模版": "climate2.json"
-            },
-            "media_player": {
-                "默认模版1": "media1.json"
-            },
-            "fan": {
-                "默认模版1": "fan1.json"
-            },
-            "light": {
-                "默认模版1": "light1.json"
-            }
+        "device_template_name": {
+            "Template1": "标准模板1",
+            "DEBUG": "调试模板"
         }
     }
 }
