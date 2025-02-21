@@ -1,8 +1,8 @@
 {
     "domain": "smartir_learn",
     "name": "SmartIR Learn",
-    "version": "1.0.0",
-    "documentation": "https://github.com/custom-components/broadlink_control",
+    "version": "2025.2.20",
+    "documentation": "https://github.com/Seifon/smartir_learn",
     "requirements": [
         "broadlink==0.19.0"
     ],
@@ -10,7 +10,7 @@
 
     ],
     "codeowners": [
-        "@your_github_username"
+        "@Seifon"
     ],
     "config_flow": true,
     "translations": [

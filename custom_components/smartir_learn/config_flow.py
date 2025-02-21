@@ -13,6 +13,7 @@ import base64
 import datetime
 import uuid
 import aiofiles
+import re
 from broadlink.exceptions import ReadError, StorageError
 
 from .constants import DOMAIN
@@ -178,8 +179,14 @@ def get_device_templates(device_template, device_template_name):
 
 
 def apply_replacement_mapping(cmd, replace_map, device_type):
-    for old, new in replace_map.get(device_type, {}).items():
-        cmd = cmd.replace(old, new)
+    # 获取device_type对应的替换映射，并按key的长度从长到短排序
+    sorted_replacements = sorted(replace_map.get(device_type, {}).items(), key=lambda x: len(x[0]), reverse=True)
+    
+    # 执行替换操作，忽略大小写
+    for old, new in sorted_replacements:
+        cmd = re.sub(re.escape(old), new, cmd, flags=re.IGNORECASE)
+    
+    # 替换掉句点为空格
     cmd = cmd.replace('.', ' ')
     return cmd
 
