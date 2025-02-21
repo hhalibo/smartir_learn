@@ -21,7 +21,8 @@ from .constants import LEARN_TIMEOUT
 from .constants import TRANSLATION_KEY_DEVICE_IP_MODE
 from .constants import TRANSLATION_KEY_TEMPLATE_FROM_FILE
 from .constants import TRANSLATION_KEY_COMMAND_REPLACE_MAP
-from .constants import TRANSLATION_KEY_DEVICE_TEMPLATES
+from .constants import TRANSLATION_KEY_DEVICE_TEMPLATE_NAME
+from .constants import DEVICE_TEMPLATE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -147,20 +148,32 @@ def extract_prefixed_data(data, prefix):
     
     return recursive_extract(data, prefix)
 
-# 每次调用时直接加载配置
-def get_device_templates(data):
+def get_device_templates(device_template, device_template_name):
     # 获取当前文件所在目录
     current_directory = os.path.dirname(os.path.abspath(__file__))
     template_directory = os.path.join(current_directory, "template")
+    
+    # 创建一个新的字典来存储结果
+    translated_device_template = {}
 
-    for key, value in data.items():
-        if isinstance(value, dict):
-            # 递归调用函数处理嵌套的字典
-            get_device_templates(value)
-        else:
-            # 更新文件路径
-            data[key] = f"{template_directory}/{value}"
-    return data
+    # 遍历每个设备类型
+    for device_type, templates in device_template.items():
+        # 初始化每个设备类型的字典
+        translated_device_template[device_type] = {}
+
+        # 遍历每个模板
+        for template_key, file_name in templates.items():
+            # 翻译模板名称
+            translated_key = device_template_name.get(template_key, template_key)
+            
+            # 加上路径
+            file_name_with_path = f"{template_directory}/{file_name}"
+
+            # 更新结果字典
+            translated_device_template[device_type][translated_key] = file_name_with_path
+
+    return translated_device_template
+
 
 def apply_replacement_mapping(cmd, replace_map, device_type):
     for old, new in replace_map.get(device_type, {}).items():
@@ -319,7 +332,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
         _LOGGER.debug(f"获取到的国际化语言: {language}")
 
         # 读取配置文件中的 DEVICE_TEMPLATES 和 COMMAND_REPLACE_MAP
-        self.device_templates = get_device_templates(extract_prefixed_data(self._translations, TRANSLATION_KEY_DEVICE_TEMPLATES))
+        self.device_templates = get_device_templates(DEVICE_TEMPLATE, extract_prefixed_data(self._translations, TRANSLATION_KEY_DEVICE_TEMPLATE_NAME))
         self.command_replace_map = extract_prefixed_data(self._translations, TRANSLATION_KEY_COMMAND_REPLACE_MAP)
         
         _LOGGER.debug(f"获取到的设备模板: {self.device_templates}")
