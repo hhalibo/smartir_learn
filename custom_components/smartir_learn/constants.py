@@ -1,8 +1,8 @@
 from typing import Final
 
 DOMAIN: Final = "smartir_learn"
-MOCK_DATA: Final = True
-LEARN_TIMEOUT = 60
+MOCK_DATA: Final = False
+LEARN_TIMEOUT: Final = 60
 
 # 设备类型列表
 DEVICE_TYPES: Final = {
@@ -12,10 +12,9 @@ DEVICE_TYPES: Final = {
     "light": "Light"
 }
 
-DEVICE_TEMPLATE = {
+DEVICE_TEMPLATE: Final = {
     "climate": {
-        "Template1": "climate1.json",
-        "DEBUG": "climate2.json"
+        "Template1": "climate1.json"
     },
     "media_player": {
         "Template1": "media1.json"

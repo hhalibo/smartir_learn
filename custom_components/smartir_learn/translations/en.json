@@ -197,7 +197,8 @@
                 "updown_off": "Turn Off Up and Down Wind",
                 "vertical": "Vertical",
                 "vertical swing": "Vertical Swing",
-                "vswing": "Vertical Swing"
+                "vswing": "Vertical Swing",
+                "minTemperature-maxTemperature": "Range Temperature"
             },
             "fan": {
                 "boost": "Boost Mode",
