@@ -12,6 +12,7 @@ import time
 import base64
 import datetime
 import uuid
+import aiofiles
 from broadlink.exceptions import ReadError, StorageError
 
 from .constants import DOMAIN
@@ -22,6 +23,7 @@ from .constants import TRANSLATION_KEY_DEVICE_IP_MODE
 from .constants import TRANSLATION_KEY_TEMPLATE_FROM_FILE
 from .constants import TRANSLATION_KEY_COMMAND_REPLACE_MAP
 from .constants import TRANSLATION_KEY_DEVICE_TEMPLATE_NAME
+from .constants import TRANSLATION_KEY_TEMPLATE_DEAL_MODE
 from .constants import DEVICE_TEMPLATE
 
 _LOGGER = logging.getLogger(__name__)
@@ -309,6 +311,7 @@ class SmartirLearnConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
     progress_task: asyncio.Task | None = None
+    template_deal_mode: str | None = None
 
     def __init__(self, config_entry):
         self.device_data = dict(config_entry.data)  # 转换成可修改的字典
@@ -431,24 +434,33 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
             selected_file = user_input.get("existing_file")
             if selected_file:
                 self.device_data["template"] = selected_file
+                self.template_deal_mode = user_input.get("template_deal_mode")
                 _LOGGER.info(f"指定模板全路径: {self.device_data["template"]}")
+                
+                if self.template_deal_mode == 'delete':
+                    await asyncio.to_thread(os.remove, selected_file)
+                    _LOGGER.info(f"File {selected_file} deleted successfully.")
+                    return await self.async_step_select_existing_file()
+
                 return await self.async_step_commands_step()
 
         # 获取现有文件列表（假设文件存放在特定目录）
-        existing_files = self.get_existing_files_list()
+        existing_files = await self.get_existing_files_list()
         _LOGGER.debug(f'获取到的文件列表：{existing_files}')
+        template_deal_mode_map = extract_prefixed_data(self._translations, TRANSLATION_KEY_TEMPLATE_DEAL_MODE)
 
         return self.async_show_form(
             step_id="select_existing_file",
             data_schema=vol.Schema({
                 vol.Required("existing_file"): vol.In(existing_files),
+                vol.Required("template_deal_mode", default="ref"): vol.In(template_deal_mode_map),
             }),
             errors=errors
         )
 
-    def get_existing_files_list(self):
+    async def get_existing_files_list(self):
         """获取现有文件列表，并返回map格式，key为文件全路径，value为文件名"""
-        
+
         # 获取所有文件并以map格式返回
         existing_files = {}
 
@@ -457,27 +469,33 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
         # 获取上一级目录并连接到目标路径
         parent_directory = os.path.dirname(current_directory)
         target_directory = os.path.join(parent_directory, "smartir", "codes", self.device_data.get("type", "").lower())
-        
+
         # 目标目录不存在，就直接返回
         if not os.path.exists(target_directory):
             return existing_files
-        
-        # 获取目录中的所有文件并按文件名排序
-        for file in sorted(os.listdir(target_directory)):
-            if file.endswith(".json"):
-                full_path = os.path.join(target_directory, file)
-                existing_files[full_path] = file
-        
+
+        try:
+            # 使用 asyncio.to_thread 来异步获取目录列表
+            files = await asyncio.to_thread(os.listdir, target_directory)
+            for file in sorted(files):
+                if file.endswith(".json"):
+                    full_path = os.path.join(target_directory, file)
+                    existing_files[full_path] = file
+
+        except Exception as e:
+            # 处理可能的异常，例如目录读取失败
+            print(f"An error occurred while listing files: {e}")
+
         return existing_files
 
     async def async_step_commands_step(self, user_input=None):
         """展示所有指令并选择指令进行学习"""
         errors = {}
-        template_file_name = self.device_data.get("template")
+        template_file_path = self.device_data.get("template")
 
-        if template_file_name:
+        if template_file_path:
             try:
-                template_data = await asyncio.to_thread(self._read_template_file, template_file_name)
+                template_data = await asyncio.to_thread(self._read_template_file, template_file_path)
                 _LOGGER.debug(f"读取模板数据成功: {template_data}")
 
                 self.device_data["commands"] = template_data.get("commands", {})
@@ -502,7 +520,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
                     errors=errors
                 )
             except FileNotFoundError:
-                _LOGGER.error(f"模板文件 {template_file_name} 未找到！")
+                _LOGGER.error(f"模板文件 {template_file_path} 未找到！")
                 errors["commands"] = "模板文件读取失败，可能不存在该文件。"
 
         return self.async_show_form(
@@ -648,7 +666,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_finish(self, user_input=None):
         """显示所有接收到的 IR 码，保存配置，并完成设置。"""
         ir_codes = self.device_data.get("ir_codes", {})
-        template_file_name = self.device_data.get("template")
+        template_file_path = self.device_data.get("template")
 
         if user_input is not None:
             # 保存文件
@@ -659,10 +677,10 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
                     data={}
                 )
 
-        if ir_codes and template_file_name:
+        if ir_codes and template_file_path:
             try:
                 # 读取模板文件
-                template_data = await asyncio.to_thread(self._read_template_file,template_file_name)
+                template_data = await asyncio.to_thread(self._read_template_file,template_file_path)
                 _LOGGER.debug(f"成功读取模板数据: {template_data}")
 
                 # 更新模板数据
@@ -688,6 +706,9 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
                 _LOGGER.info(f"学习到的所有 IR 码并生成的配置: {self.configuration_json}")
                 # 保存配置到文件
                 self.file_base_name, self.saved_file_path = self._get_configuration_file_path()
+                if self.template_deal_mode == 'replace':
+                    self.saved_file_path = template_file_path
+                    self.file_base_name = os.path.splitext(os.path.basename(template_file_path))[0]
 
                 # 在表单中显示保存的文件内容和路径
                 return self.async_show_form(
@@ -704,7 +725,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
                     last_step=True
                 )
             except FileNotFoundError:
-                _LOGGER.error(f"模板文件 {template_file_name} 未找到！ 路径：{template_file_name}")
+                _LOGGER.error(f"模板文件 {template_file_path} 未找到！ 路径：{template_file_path}")
 
         # 如果没有学习到 IR 码，记录错误信息
         _LOGGER.error("未能学习到任何 IR 码")
