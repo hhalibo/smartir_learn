@@ -82,6 +82,13 @@
                     "command": "指令"
                 }
             },
+            "learn_ir_code_progres": {
+                "title": "学习指令红外码",
+                "description": "请先通过遥控器切换到 {command_pre}，然后点击提交",
+                "data": {
+                    "command": "指令"
+                }
+            },
             "finish": {
                 "title": "确认信息",
                 "description": "device_code:\n{device_code}\n\nSmartIR文件将存放到：\n{file_path}\n{file_contents}",

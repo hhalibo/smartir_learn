@@ -82,6 +82,13 @@
                     "command": "Command"
                 }
             },
+            "learn_ir_code_progres": {
+                "title": "Learn IR Command Code",
+                "description": "Please switch to {command_pre} on the remote control first, then click submit.",
+                "data": {
+                    "command": "Command"
+                }
+            },
             "finish": {
                 "title": "Confirm Information",
                 "description": "device_code:\n{device_code}\n\nSmartIR file will be stored at:\n{file_path}\n{file_contents}",

@@ -14,7 +14,8 @@ DEVICE_TYPES: Final = {
 
 DEVICE_TEMPLATE: Final = {
     "climate": {
-        "Template1": "climate1.json"
+        "Template1": "climate1.json",
+        "DEBUG": "climate2.json"
     },
     "media_player": {
         "Template1": "media1.json"

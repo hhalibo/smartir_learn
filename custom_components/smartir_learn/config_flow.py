@@ -190,6 +190,12 @@ def apply_replacement_mapping(cmd, replace_map, device_type):
     cmd = cmd.replace('.', ' ')
     return cmd
 
+def remove_after_last_space(s):
+    result = s[:s.rfind('.')] if '.' in s else s
+    if result == s:
+        result = s[:s.rfind(' ')] if ' ' in s else s
+    return result
+
 class SmartirLearnConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1  # 配置流的版本
 
@@ -580,12 +586,21 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
         # 获取当前指令
         selected_commands = self.device_data.get("selected_commands", [])
         if selected_commands:
+            self.device_data["prev_command"] = self.device_data.get("current_command", None)
             command = selected_commands[0]  # 获取第一个未学习的指令
             self.device_data["current_command"] = command
             command_name = apply_replacement_mapping(command, self.command_replace_map, self.device_data.get("type"))
             self.device_data["current_command_name"] = command_name
             _LOGGER.debug(f"准备开始学习 IR 码：{command_name}")
             self.progress_task = None
+            _LOGGER.debug(f'-------prev_command: {self.device_data.get("prev_command")}  current_command: {command}')
+            if self.device_data.get("prev_command") and remove_after_last_space(self.device_data.get("prev_command")) != remove_after_last_space(command):
+                return self.async_show_form(
+                    step_id="learn_ir_code_progres",
+                    description_placeholders={"command_pre": f'<b>{remove_after_last_space(command_name)}</b>'},
+                    errors=errors
+                )
+
             return await self.async_step_learn_ir_code_progres()
 
         # 如果没有指令需要学习，跳转到完成步骤
