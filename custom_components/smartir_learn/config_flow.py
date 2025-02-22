@@ -202,6 +202,17 @@ def remove_before_last_space(s):
         result = s.split(' ')[-1] if ' ' in s else ''
     return result
 
+def get_nested_value(data, path):
+    """从嵌套字典中获取值，路径通过.分隔"""
+    keys = path.split(".")
+    for key in keys:
+        # 如果当前的data是字典，尝试按key获取对应的值
+        if isinstance(data, dict) and key in data:
+            data = data[key]
+        else:
+            return None  # 如果找不到对应的值，返回None
+    return data
+
 class SmartirLearnConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1  # 配置流的版本
 
@@ -534,6 +545,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
         if template_file_path:
             try:
                 template_data = await asyncio.to_thread(self._read_template_file, template_file_path)
+                self.device_data["template_data"] = template_data
                 _LOGGER.debug(f"读取模板数据成功: {template_data}")
 
                 self.device_data["commands"] = template_data.get("commands", {})
@@ -546,8 +558,12 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
                     _LOGGER.debug(f"需要学习的指令列表：{selected_commands}")
                     self.device_data["selected_commands"] = selected_commands
 
+                    if self.template_deal_mode == 'test':
+                        return await self.async_step_test_all_command()
+
                     # 如果有指令，跳转到学习 IR 码步骤
                     return await self.async_step_learn_ir_code()
+
 
                 commands_select = {cmd: apply_replacement_mapping(cmd, self.command_replace_map, self.device_data.get("type")) for cmd in all_commands}
                 return self.async_show_form(
@@ -565,6 +581,116 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
             step_id="commands_step",
             errors=errors
         )
+
+    async def async_step_test_all_command(self):
+        """验证所有指令"""
+        errors = {}
+
+        # 获取所有指令
+        template_data = self.device_data["template_data"]
+        all_commands = self.device_data["selected_commands"]
+        # 获取已选择的指令
+        selected_commands = self.device_data.get("selected_commands", [])
+
+        # 记录未通过的指令
+        if not hasattr(self, 'failed_commands'):
+            self.failed_commands = []
+            self.failed_command_names = []
+
+        if not hasattr(self, 'current_command_index'):
+            self.current_command_index = 0
+
+        # 筛选出 selected_commands 中的指令
+        selected_commands = [cmd for cmd in selected_commands if cmd in all_commands]
+
+        if self.current_command_index < len(selected_commands):
+            # 获取当前指令和其value值
+            command = selected_commands[self.current_command_index]
+            command_value = get_nested_value(self.device_data["commands"], command)
+
+            # 设置当前指令到上下文
+            self.device_data["current_command"] = command
+            self.device_data["current_command_name"] = apply_replacement_mapping(command, self.command_replace_map, self.device_data.get("type"))
+            self.device_data["current_command_value"] = command_value
+
+            # 逐个指令测试
+            return await self.async_step_test_command()
+
+        # 所有指令验证完成后，展示未通过指令列表
+        return await self.async_step_finish_failed_tests()
+
+    async def async_step_test_command(self, user_input=None):
+        """验证单个指令"""
+        errors = {}
+        command = self.device_data.get("current_command")
+        command_name = self.device_data["current_command_name"]
+        command_value = self.device_data.get("current_command_value")
+
+        if user_input is not None:
+            test_result = user_input.get("test_result")
+            if test_result == "fail":
+                # 如果验证失败，记录未通过的指令
+                self.failed_commands.append(command)
+                self.failed_command_names.append(command_name)
+
+            # 继续测试下一个指令
+            self.current_command_index += 1
+
+            # 如果还有指令未验证，继续测试下一个
+            return await self.async_step_test_all_command()
+
+        # 显示测试指令的界面，等待用户选择通过或未通过
+        return self.async_show_form(
+            step_id="test_command",
+            description_placeholders={
+                "command": f'`{command_name}`',
+                "command_value": f'`{command_value}`',
+            },
+            data_schema=vol.Schema({
+                vol.Required("test_result"): vol.In(["pass", "fail"])  # 用户选择是否通过
+            }),
+            errors=errors
+        )
+ 
+    async def async_step_finish_failed_tests(self, user_input=None):
+        """展示所有未通过的指令，并处理重新学习的选择"""
+        # 如果用户选择重新学习
+        if user_input and user_input.get("retry_learning") == "yes":
+            # 更新 selected_commands 为失败的指令
+            self.device_data["selected_commands"] = self.failed_commands
+            self.template_deal_mode = 'replace'
+
+            # 清理
+            self.failed_commands = None
+            self.failed_command_names = None
+            self.current_command_value = None
+            self.current_command_index = None
+
+            # 进入重新学习流程
+            _LOGGER.debug(f'进入重新学习流程 selected_commands: {self.failed_commands}')
+            return await self.async_step_learn_ir_code()
+
+        if hasattr(self, 'failed_command_names') and self.failed_command_names:
+            failed_commands_list = "\n".join(self.failed_command_names)
+
+            # 显示未通过的指令，并提供重新学习的选项
+            return self.async_show_form(
+                step_id="finish_failed_tests",
+                description_placeholders={
+                    "failed_commands": f'```\n{failed_commands_list}\n```',
+                },
+                data_schema=vol.Schema({
+                    vol.Required("retry_learning"): vol.In(["yes", "no"])  # 用户选择是否重新学习
+                }),
+                errors={},
+                last_step=True
+            )
+        else:
+            # 如果没有未通过的指令，完成配置
+            return self.async_create_entry(
+                    title="设备配置完成",
+                    data={}
+                )
 
     def expand_selected_temperature_commands(self, selected_commands):
         """展开用户选中的温度指令，保留前缀并生成相应的命令"""
@@ -785,17 +911,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
                 _LOGGER.error(f"模板文件 {template_file_path} 未找到！ 路径：{template_file_path}")
 
         # 如果没有学习到 IR 码，记录错误信息
-        _LOGGER.error("未能学习到任何 IR 码")
-
-        return self.async_show_form(
-            step_id="finish",
-            description_placeholders={"message": "未能学习到任何 IR 码"},
-            data_schema=vol.Schema({
-                
-            }),
-            errors={},
-            last_step=True
-        )
+        return self.async_abort(reason="未能学习到任何 IR 码")
 
     def _save_configuration_file(self, file_path, configuration_json):
         # 将配置写入到文件

@@ -89,6 +89,32 @@
                     "command": "指令"
                 }
             },
+            "test_command": {
+                "title": "测试红外码指令",
+                "description": "测试指令：\n{command}\n\n指令值：\n{command_value}",
+                "data": {
+                    "test_result": "结果"
+                },
+                "options": {
+                    "test_result": {
+                        "pass": "通过",
+                        "fail": "未通过"
+                    }
+                }
+            },
+            "finish_failed_tests": {
+                "title": "未通过的指令",
+                "description": "以下是未通过测试的指令：\n{failed_commands}",
+                "data": {
+                    "retry_learning": "是否重新学习这些指令"
+                },
+                "options": {
+                    "retry_learning": {
+                        "yes": "是",
+                        "no": "否"
+                    }
+                }
+            },
             "finish": {
                 "title": "确认信息",
                 "description": "device_code:\n{device_code}\n\nSmartIR文件将存放到：\n{file_path}\n{file_contents}",
