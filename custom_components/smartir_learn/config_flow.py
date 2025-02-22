@@ -639,6 +639,11 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
             # 如果还有指令未验证，继续测试下一个
             return await self.async_step_test_all_command()
 
+        # 发送红外指令
+        result, error = await self.send_ir_code(command_value)
+        if error:
+            errors['test_result'] = error
+
         # 显示测试指令的界面，等待用户选择通过或未通过
         return self.async_show_form(
             step_id="test_command",
@@ -845,6 +850,37 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
         else:
             _LOGGER.error("No data received...")  # 超时未获取到数据，输出提示信息
             raise broadlink.exceptions.NetworkTimeoutError("Failed to receive IR data within timeout period.")
+
+
+    async def send_ir_code(self, command_value):
+        """
+        进入学习模式并等待红外命令。
+        """
+        if MOCK_DATA:
+            return True, None
+
+        ip = self.device_data.get("device_ip")
+        try:
+            self.device.send_data(base64.b64decode(command_value))
+            _LOGGER.info(f'已发送IR指令：{command_value}')
+            return True, None
+        except broadlink.exceptions.NetworkTimeoutError as e:
+            error_message = f"当前设备IP，无法连接，请检查！IP: {ip}，错误详情: {e}"
+            _LOGGER.error(error_message)
+            return False, error_message
+        except broadlink.exceptions.AuthenticationError as e:
+            error_message = f"设备授权失败，请在博联APP设备属性里，关闭“设备上锁”  IP: {ip}，错误详情: {e}"
+            _LOGGER.error(error_message)
+            return False, error_message
+        except OSError as e:
+            error_message = f"IP格式错误，请输入有效的设备 IP 地址"
+            _LOGGER.error(error_message)
+            return False, error_message
+        except Exception as e:
+            error_message = f"连接设备，出现异常！IP: {ip}，错误详情: {e}"
+            _LOGGER.error(error_message)
+            return False, error_message
+        return False, '异常'
 
     async def async_step_finish(self, user_input=None):
         """显示所有接收到的 IR 码，保存配置，并完成设置。"""
