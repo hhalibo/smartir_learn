@@ -196,6 +196,12 @@ def remove_after_last_space(s):
         result = s[:s.rfind(' ')] if ' ' in s else s
     return result
 
+def remove_before_last_space(s):
+    result = s.split('.')[-1] if '.' in s else ''
+    if result == s:
+        result = s.split(' ')[-1] if ' ' in s else ''
+    return result
+
 class SmartirLearnConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1  # 配置流的版本
 
@@ -593,11 +599,19 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
             self.device_data["current_command_name"] = command_name
             _LOGGER.debug(f"准备开始学习 IR 码：{command_name}")
             self.progress_task = None
-            _LOGGER.debug(f'-------prev_command: {self.device_data.get("prev_command")}  current_command: {command}')
+            _LOGGER.debug(f'-------prev_command: {self.device_data.get("prev_command")}  current_command: {command}  min_temperature: {self.device_data.get("min_temperature")}')
             if self.device_data.get("prev_command") and remove_after_last_space(self.device_data.get("prev_command")) != remove_after_last_space(command):
+                command_pre = remove_after_last_space(command_name)
+                commond_sigle = remove_before_last_space(command)
+                if commond_sigle == str(self.device_data.get("min_temperature")):
+                    command_pre = f"{command_pre} {int(commond_sigle) + 1}"
+
                 return self.async_show_form(
                     step_id="learn_ir_code_progres",
-                    description_placeholders={"command_pre": f'<b>{remove_after_last_space(command_name)}</b>'},
+                    description_placeholders={
+                        "command_pre": f'<b>{command_pre}</b>',
+                        "mode": 1
+                    },
                     errors=errors
                 )
 
@@ -633,6 +647,8 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
         errors = {}
         command_name = self.device_data["current_command_name"]
         errors["command"] = self.error
+        # 清除错误
+        self.error = None
 
         return self.async_show_form(
             step_id="learn_ir_code",

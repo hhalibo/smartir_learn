@@ -136,12 +136,12 @@
                 "fan_low": "低风扇",
                 "fan_medium": "中风扇",
                 "fan_mid": "中风扇",
-                "fan_only": "仅风扇模式",
+                "fan_only": "送风模式",
                 "fan_quiet": "安静风扇",
                 "feal": "感觉",
                 "feel": "感觉",
                 "hda": "高精度",
-                "heat": "加热模式",
+                "heat": "制热模式",
                 "heat_auto_": "自动加热",
                 "heat_cool": "冷热交替",
                 "hi-power": "高功率",
@@ -420,8 +420,9 @@
         "template_deal_mode": {
             "ref": "引用",
             "replace": "替换",
-            "delete": "删除",
-            "view": "查看"
+            "view": "查看",
+            "test": "验证",
+            "delete": "删除"
         }
     }
 }
