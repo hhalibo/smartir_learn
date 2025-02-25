@@ -25,7 +25,6 @@ from .constants import TRANSLATION_KEY_TEMPLATE_FROM_FILE
 from .constants import TRANSLATION_KEY_COMMAND_REPLACE_MAP
 from .constants import TRANSLATION_KEY_DEVICE_TEMPLATE_NAME
 from .constants import TRANSLATION_KEY_TEMPLATE_DEAL_MODE
-from .constants import DEVICE_TEMPLATE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -151,7 +150,7 @@ def extract_prefixed_data(data, prefix):
     
     return recursive_extract(data, prefix)
 
-def get_device_templates(device_template, device_template_name):
+def get_device_templates(device_template_name):
     # 获取当前文件所在目录
     current_directory = os.path.dirname(os.path.abspath(__file__))
     template_directory = os.path.join(current_directory, "template")
@@ -159,21 +158,27 @@ def get_device_templates(device_template, device_template_name):
     # 创建一个新的字典来存储结果
     translated_device_template = {}
 
-    # 遍历每个设备类型
-    for device_type, templates in device_template.items():
-        # 初始化每个设备类型的字典
-        translated_device_template[device_type] = {}
+    # 遍历template目录的所有子目录
+    for device_type in os.listdir(template_directory):
+        device_type_path = os.path.join(template_directory, device_type)
 
-        # 遍历每个模板
-        for template_key, file_name in templates.items():
-            # 翻译模板名称
-            translated_key = device_template_name.get(template_key, template_key)
-            
-            # 加上路径
-            file_name_with_path = f"{template_directory}/{file_name}"
+        # 检查是否为目录
+        if os.path.isdir(device_type_path):
+            translated_device_template[device_type] = {}
 
-            # 更新结果字典
-            translated_device_template[device_type][translated_key] = file_name_with_path
+            # 遍历该目录下的所有文件
+            for file_name in os.listdir(device_type_path):
+                file_path = os.path.join(device_type_path, file_name)
+
+                # 确保只处理文件，且文件名不包含后缀
+                if os.path.isfile(file_path) and '.' in file_name:
+                    translated_key = os.path.splitext(file_name)[0]
+                    
+                    # 使用device_template_name来翻译translated_key
+                    translated_key = device_template_name.get(translated_key, translated_key)
+                    
+                    # 更新字典
+                    translated_device_template[device_type][translated_key] = file_path
 
     return translated_device_template
 
@@ -365,7 +370,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
         _LOGGER.debug(f"获取到的国际化语言: {language}")
 
         # 读取配置文件中的 DEVICE_TEMPLATES 和 COMMAND_REPLACE_MAP
-        self.device_templates = get_device_templates(DEVICE_TEMPLATE, extract_prefixed_data(self._translations, TRANSLATION_KEY_DEVICE_TEMPLATE_NAME))
+        self.device_templates = get_device_templates(extract_prefixed_data(self._translations, TRANSLATION_KEY_DEVICE_TEMPLATE_NAME))
         self.command_replace_map = extract_prefixed_data(self._translations, TRANSLATION_KEY_COMMAND_REPLACE_MAP)
         
         _LOGGER.debug(f"获取到的设备模板: {self.device_templates}")
@@ -526,7 +531,11 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
         try:
             # 使用 asyncio.to_thread 来异步获取目录列表
             files = await asyncio.to_thread(os.listdir, target_directory)
-            for file in sorted(files):
+
+            # 排序文件，超过16位的文件排在前面
+            files.sort(key=lambda f: (len(f) <= 16, f))
+
+            for file in files:
                 if file.endswith(".json"):
                     full_path = os.path.join(target_directory, file)
                     existing_files[full_path] = file
@@ -544,28 +553,84 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
 
         if template_file_path:
             try:
-                template_data = await asyncio.to_thread(self._read_template_file, template_file_path)
-                self.device_data["template_data"] = template_data
-                _LOGGER.debug(f"读取模板数据成功: {template_data}")
+                # 初次加载模板时持久化数据 -----------------------------------------
+                if "expanded_commands" not in self.device_data:  # 关键判断：确保只初始化一次
+                    template_data = await asyncio.to_thread(self._read_template_file, template_file_path)
+                    self.device_data["template_data"] = template_data
+                    _LOGGER.debug(f"读取模板数据成功: {template_data}")
 
-                self.device_data["commands"] = template_data.get("commands", {})
-                all_commands = self.extract_commands(self.device_data["commands"])
+                    raw_commands = self.extract_commands(template_data.get("commands", {}))
+                    self.device_data["raw_commands"] = raw_commands  # 原始未扩展指令
+                    self.device_data["expanded_commands"] = self.expand_selected_temperature_commands(raw_commands.copy())  # 预先生成完整列表
+
+                # 从持久化数据获取指令列表 -----------------------------------------
+                all_commands = self.device_data["expanded_commands"]
+                _LOGGER.debug(f"当前可用指令列表: {all_commands}")
 
                 if user_input is not None:
-                    selected_commands = user_input.get("commands", [])
-                    # 处理选中的指令，展开其中的温度指令
-                    selected_commands = self.expand_selected_temperature_commands(selected_commands)
-                    _LOGGER.debug(f"需要学习的指令列表：{selected_commands}")
+                    # 处理按钮点击动作 -------------------------------------------
+                    select_all_clicked = user_input.get("select_all", False)
+                    deselect_all_clicked = user_input.get("deselect_all", False)
+                    
+                    # 获取并严格过滤用户输入 -------------------------------------
+                    selected_commands = [
+                        cmd for cmd in user_input.get("commands", [])
+                        if cmd in all_commands  # 强制过滤非法值
+                    ]
+
+                    # 处理全选/全不选 -------------------------------------------
+                    if select_all_clicked:
+                        selected_commands = all_commands.copy()
+                    elif deselect_all_clicked:
+                        selected_commands = []
+
+                    # 更新设备数据（不再需要额外扩展）--------------------------------
+                    _LOGGER.debug(f"最终学习指令列表：{selected_commands}")
                     self.device_data["selected_commands"] = selected_commands
 
-                    if self.template_deal_mode == 'test':
-                        return await self.async_step_test_all_command()
+                    # 如果是按钮点击，刷新表单 -------------------------------------
+                    if select_all_clicked or deselect_all_clicked:
+                        commands_select = {
+                            cmd: apply_replacement_mapping(
+                                cmd, 
+                                self.command_replace_map, 
+                                self.device_data.get("type")
+                            ) for cmd in all_commands
+                        }
+                        return self.async_show_form(
+                            step_id="commands_step",
+                            data_schema=vol.Schema({
+                                vol.Required("commands", default=selected_commands): cv.multi_select(commands_select),
+                                vol.Optional("deselect_all" if select_all_clicked else "select_all"): vol.Coerce(bool) # 全选或全不选按钮
+                            }),
+                            errors=errors
+                        )
 
-                    # 如果有指令，跳转到学习 IR 码步骤
-                    return await self.async_step_learn_ir_code()
+                    # 提交验证 ---------------------------------------------------
+                    if not selected_commands:
+                        errors["base"] = "至少选择一个指令"
+                    else:
+                        if self.template_deal_mode == 'test':
+                            return await self.async_step_test_all_command()
+                        return await self.async_step_learn_ir_code()
 
-
-                commands_select = {cmd: apply_replacement_mapping(cmd, self.command_replace_map, self.device_data.get("type")) for cmd in all_commands}
+                # 初次显示表单 -------------------------------------------------
+                commands_select = {
+                    cmd: apply_replacement_mapping(
+                        cmd, 
+                        self.command_replace_map, 
+                        self.device_data.get("type")
+                    ) for cmd in all_commands
+                }
+                return self.async_show_form(
+                    step_id="commands_step",
+                    data_schema=vol.Schema({
+                            vol.Required("commands", default=all_commands): cv.multi_select(commands_select),
+                            vol.Optional("deselect_all"): vol.Coerce(bool)  # 全不选按钮
+                        }),
+                        errors=errors
+                    )
+                
                 return self.async_show_form(
                     step_id="commands_step",
                     data_schema=vol.Schema({
@@ -575,7 +640,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
                 )
             except FileNotFoundError:
                 _LOGGER.error(f"模板文件 {template_file_path} 未找到！")
-                errors["commands"] = "模板文件读取失败，可能不存在该文件。"
+                errors["base"] = "template_missing"
 
         return self.async_show_form(
             step_id="commands_step",

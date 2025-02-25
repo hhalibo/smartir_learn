@@ -12,22 +12,6 @@ DEVICE_TYPES: Final = {
     "light": "Light"
 }
 
-DEVICE_TEMPLATE: Final = {
-    "climate": {
-        "Template1": "climate1.json",
-        "DEBUG": "climate2.json"
-    },
-    "media_player": {
-        "Template1": "media1.json"
-    },
-    "fan": {
-        "Template1": "fan1.json"
-    },
-    "light": {
-        "Template1": "light1.json"
-    }
-}
-
 # Translation Keys
 TRANSLATION_KEY_DEVICE_IP_MODE: Final = f"component.{DOMAIN}.common.device_ip_mode"
 TRANSLATION_KEY_TEMPLATE_FROM_FILE: Final = f"component.{DOMAIN}.common.template_from_file"

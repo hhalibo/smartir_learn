@@ -50,7 +50,9 @@
                 "title": "学习指令列表",
                 "description": "请勾选需要学习的指令",
                 "data": {
-                    "commands": "指令"
+                    "commands": "指令",
+                    "select_all": "✅ 全选所有指令",
+                    "deselect_all": "❌ 清空所有选择"
                 }
             },
             "select_existing_file": {
