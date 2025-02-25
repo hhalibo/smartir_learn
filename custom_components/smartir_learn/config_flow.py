@@ -671,7 +671,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
         if self.current_command_index < len(selected_commands):
             # 获取当前指令和其value值
             command = selected_commands[self.current_command_index]
-            command_value = get_nested_value(self.device_data["commands"], command)
+            command_value = get_nested_value(self.device_data["raw_commands"], command)
 
             # 设置当前指令到上下文
             self.device_data["current_command"] = command
