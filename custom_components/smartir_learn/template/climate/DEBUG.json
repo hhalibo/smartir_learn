@@ -22,18 +22,18 @@
         "quiet"
     ],
     "commands": {
-        "off": "1111",
+        "off": "",
         "dry": {
             "auto": {
-                "minTemperature-maxTemperature": "111"
+                "minTemperature-maxTemperature": ""
             },
             "high": {
-                "minTemperature-maxTemperature": "1111"
+                "minTemperature-maxTemperature": ""
             }
         },
         "fan_only": {
             "auto": {
-                "minTemperature-maxTemperature": "111"
+                "minTemperature-maxTemperature": ""
             }
         }
     }

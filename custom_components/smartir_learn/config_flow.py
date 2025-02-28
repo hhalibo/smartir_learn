@@ -14,6 +14,7 @@ import datetime
 import uuid
 import aiofiles
 import re
+from collections import OrderedDict
 from broadlink.exceptions import ReadError, StorageError
 
 from .constants import DOMAIN
@@ -38,10 +39,6 @@ SETUP_SCHEMA = vol.Schema({
 CONFIGURE_SCHEMA = vol.Schema({
     # 设备类型
     vol.Required("type"): vol.In(DEVICE_TYPES),
-    # 设备制造商，必填, 逗号分隔
-    vol.Required("manufacturer"): str,
-    # 设备型号，必填
-    vol.Required("models"): str,
 })
 
 # 扫描设备 IP 地址
@@ -566,6 +563,30 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
 
         return existing_files
 
+    def _get_commands_step_schema(self, all_commands, default_commands=None, select_all_clicked=True):
+        """动态生成包含条件字段的 Schema（保证字段顺序）"""
+        schema_fields = OrderedDict()
+
+        # 非测试模式时添加制造商和型号到最前面
+        if self.template_deal_mode != 'test':
+            schema_fields[vol.Required("manufacturer", default=self.device_data.get("manufacturer", ""))] = str
+            schema_fields[vol.Required("models", default=self.device_data.get("models", ""))] = str
+        
+        commands_select = {
+            cmd: apply_replacement_mapping(
+                cmd, 
+                self.command_replace_map, 
+                self.device_data.get("type")
+            ) for cmd in all_commands
+        }
+
+        """动态生成包含条件字段的 Schema"""
+        # 基础字段：指令选择和多选按钮
+        schema_fields[vol.Required("commands", default=default_commands or [])] = cv.multi_select(commands_select)
+        schema_fields[vol.Optional("deselect_all" if select_all_clicked else "select_all")] = vol.Coerce(bool)
+        
+        return vol.Schema(schema_fields)
+        
     async def async_step_commands_step(self, user_input=None):
         """展示所有指令并选择指令进行学习"""
         errors = {}
@@ -573,6 +594,16 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
 
         if template_file_path:
             try:
+                # 初次加载模板时初始化默认值
+                if "template_data" not in self.device_data:
+                    template_data = await asyncio.to_thread(self._read_template_file, template_file_path)
+                    self.device_data["template_data"] = template_data
+                    
+                    # 从模板读取默认值
+                    self.device_data.setdefault("manufacturer", template_data.get("manufacturer", ""))
+                    models = ",".join(template_data.get("supportedModels", []))
+                    self.device_data.setdefault("models", models)
+                    
                 # 初次加载模板时持久化数据 -----------------------------------------
                 if "expanded_commands" not in self.device_data:  # 关键判断：确保只初始化一次
                     template_data = await asyncio.to_thread(self._read_template_file, template_file_path)
@@ -604,25 +635,34 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
                     elif deselect_all_clicked:
                         selected_commands = []
 
+                    # 非测试模式时需要验证制造商和型号
+                    if self.template_deal_mode != 'test':
+                        # 保存并验证字段
+                        self.device_data["manufacturer"] = user_input.get("manufacturer", "")
+                        self.device_data["models"] = user_input.get("models", "")
+                        
+                        # 输入验证
+                        if not self.device_data["manufacturer"]:
+                            errors["manufacturer"] = "制造商不能为空"
+                        if not self.device_data["models"]:
+                            errors["models"] = "型号不能为空"
+                    
+                    if errors:
+                        return self.async_show_form(
+                            step_id="commands_step",
+                            data_schema=self._get_commands_step_schema(all_commands, selected_commands, select_all_clicked),
+                            errors=errors
+                        )
+
                     # 更新设备数据（不再需要额外扩展）--------------------------------
                     _LOGGER.debug(f"待学习指令列表：{selected_commands}")
                     self.device_data["selected_commands"] = selected_commands
 
                     # 如果是按钮点击，刷新表单 -------------------------------------
                     if select_all_clicked or deselect_all_clicked:
-                        commands_select = {
-                            cmd: apply_replacement_mapping(
-                                cmd, 
-                                self.command_replace_map, 
-                                self.device_data.get("type")
-                            ) for cmd in all_commands
-                        }
                         return self.async_show_form(
                             step_id="commands_step",
-                            data_schema=vol.Schema({
-                                vol.Required("commands", default=selected_commands): cv.multi_select(commands_select),
-                                vol.Optional("deselect_all" if select_all_clicked else "select_all"): vol.Coerce(bool) # 全选或全不选按钮
-                            }),
+                            data_schema=self._get_commands_step_schema(all_commands, selected_commands, select_all_clicked),
                             errors=errors
                         )
 
@@ -635,27 +675,9 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
                         return await self.async_step_learn_ir_code()
 
                 # 初次显示表单 -------------------------------------------------
-                commands_select = {
-                    cmd: apply_replacement_mapping(
-                        cmd, 
-                        self.command_replace_map, 
-                        self.device_data.get("type")
-                    ) for cmd in all_commands
-                }
                 return self.async_show_form(
                     step_id="commands_step",
-                    data_schema=vol.Schema({
-                            vol.Required("commands", default=all_commands): cv.multi_select(commands_select),
-                            vol.Optional("deselect_all"): vol.Coerce(bool)  # 全不选按钮
-                        }),
-                        errors=errors
-                    )
-                
-                return self.async_show_form(
-                    step_id="commands_step",
-                    data_schema=vol.Schema({
-                        vol.Required("commands", default=all_commands): cv.multi_select(commands_select)
-                    }),
+                    data_schema=self._get_commands_step_schema(all_commands, all_commands, True),
                     errors=errors
                 )
             except FileNotFoundError:
@@ -1007,7 +1029,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
 
                 # 转换为 JSON 字符串
                 self.configuration_json = json.dumps(template_data, indent=2)
-                _LOGGER.info(f"学习到的所有 IR 码：{ir_codes}    生成的配置: {self.configuration_json}")
+                _LOGGER.info(f"学习到的所有 IR 码：{ir_codes}\n\n生成的配置: {self.configuration_json}")
                 # 保存配置到文件
                 self.file_base_name, self.saved_file_path = self._get_configuration_file_path()
                 if self.template_deal_mode == 'replace':

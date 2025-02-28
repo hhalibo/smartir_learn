@@ -32,9 +32,7 @@
                 "title": "学码配置",
                 "description": "为您的设备配置必要的信息",
                 "data": {
-                    "type": "设备类型",
-                    "manufacturer": "制造商",
-                    "models": "型号（用逗号分隔）"
+                    "type": "设备类型"
                 }
             },
             "template_and_temperature": {
@@ -52,7 +50,9 @@
                 "data": {
                     "commands": "指令",
                     "select_all": "✅ 全选所有指令",
-                    "deselect_all": "❌ 清空所有选择"
+                    "deselect_all": "❌ 清空所有选择",
+                    "manufacturer": "制造商",
+                    "models": "型号（用逗号分隔）"
                 }
             },
             "select_existing_file": {
