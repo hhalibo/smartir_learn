@@ -63,29 +63,49 @@ def scan_devices():
     return devices
 
 def merge_commands(template_commands, learned_commands, min_temperature=None, max_temperature=None):
-    """递归更新模板命令，处理温度范围并替换"""
+    """递归更新模板命令，处理温度范围并替换
+    如果 learned_commands 中提供了具体温度，则对应温度赋值为 learned value，其它温度赋值为空字符串；
+    对于模板中存在但 learned_commands 未覆盖的温度范围，全部赋值为空字符串。
+    """
+    if min_temperature is None or max_temperature is None:
+        _LOGGER.error("温度范围未设置，无法进行替换！")
+        return template_commands
+
+    # 先根据 learned_commands 更新模板
     for key, value in learned_commands.items():
         keys = key.split('.')
         current_level = template_commands
-
         for part in keys[:-1]:
-            if part not in current_level:
+            if part not in current_level or not isinstance(current_level[part], dict):
                 current_level[part] = {}
             current_level = current_level[part]
 
-        # 处理温度范围 minTemperature-maxTemperature
-        if "minTemperature-maxTemperature" in current_level:
-            if min_temperature is not None and max_temperature is not None:
+        # 判断 learned 命令是否为温度相关命令（最后一级是否为数字）
+        if keys[-1].isdigit():
+            # 如果当前层存在温度范围占位符，则进行温度替换
+            if "minTemperature-maxTemperature" in current_level:
                 del current_level["minTemperature-maxTemperature"]
-                # 替换为温度范围中的每个值
+                learned_temp = int(keys[-1])
                 for temp in range(min_temperature, max_temperature + 1):
-                    current_level[f"{temp}"] = value
+                    current_level[str(temp)] = value if temp == learned_temp else ""
             else:
-                _LOGGER.error("温度范围未设置，无法进行替换！")
-        else:
-            # 正常情况下，覆盖现有命令
-            if isinstance(current_level, dict) and keys[-1] in current_level:
+                # 模板中未设置温度范围占位符，直接更新该键
                 current_level[keys[-1]] = value
+        else:
+            # 非温度相关命令，直接覆盖
+            current_level[keys[-1]] = value
+
+    # 处理模板中剩余未被 learned_commands 覆盖的温度范围
+    def process_temperature_ranges(d):
+        for k, v in d.items():
+            if isinstance(v, dict):
+                if "minTemperature-maxTemperature" in v:
+                    del v["minTemperature-maxTemperature"]
+                    for temp in range(min_temperature, max_temperature + 1):
+                        v[str(temp)] = ""
+                else:
+                    process_temperature_ranges(v)
+    process_temperature_ranges(template_commands)
 
     return template_commands
 
@@ -585,7 +605,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
                         selected_commands = []
 
                     # 更新设备数据（不再需要额外扩展）--------------------------------
-                    _LOGGER.debug(f"最终学习指令列表：{selected_commands}")
+                    _LOGGER.debug(f"待学习指令列表：{selected_commands}")
                     self.device_data["selected_commands"] = selected_commands
 
                     # 如果是按钮点击，刷新表单 -------------------------------------
@@ -965,7 +985,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
             try:
                 # 读取模板文件
                 template_data = await asyncio.to_thread(self._read_template_file,template_file_path)
-                _LOGGER.debug(f"成功读取模板数据: {template_data}")
+                _LOGGER.debug(f"模板数据: {template_data}")
 
                 # 更新模板数据
                 template_data["manufacturer"] = self.device_data.get("manufacturer", "Unknown")
@@ -987,7 +1007,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
 
                 # 转换为 JSON 字符串
                 self.configuration_json = json.dumps(template_data, indent=2)
-                _LOGGER.info(f"学习到的所有 IR 码并生成的配置: {self.configuration_json}")
+                _LOGGER.info(f"学习到的所有 IR 码：{ir_codes}    生成的配置: {self.configuration_json}")
                 # 保存配置到文件
                 self.file_base_name, self.saved_file_path = self._get_configuration_file_path()
                 if self.template_deal_mode == 'replace':
