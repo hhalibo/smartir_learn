@@ -13,10 +13,30 @@
 
 ## 安装步骤
 
+### 方式一：通过 HACS 安装（推荐）
+1. **安装 HACS**  
+   如果尚未安装 HACS，请先参考[官方文档](https://hacs.xyz/docs/setup/download)进行安装
+
+2. **添加自定义仓库**
+   - 进入 HACS 页面 ➡️ **集成**
+   - 点击右上角 `⋮` ➡️ **自定义仓库**
+   - 输入仓库 URL：`https://github.com/Seifon/smartir_learn`
+   - 分类选择 **Integration**
+
+3. **安装插件**
+   - 在 HACS 的 **集成** 页面搜索 "SmartIR Learn"
+   - 点击进入插件页面 ➡️ **下载**
+   - 等待下载完成后重启 HomeAssistant
+
+### 方式二：手动安装
 1. 将插件文件夹 `smartir_learn` 复制到 HomeAssistant 的 `custom_components` 目录
 2. 重启 HomeAssistant 服务
-3. 进入 **配置 -> 设备与服务 -> 集成**
-4. 点击右下角 "+添加集成"，搜索选择 "SmartIR Learn"
+
+### 初始化配置
+1. 进入 **配置 -> 设备与服务 -> 集成**
+2. 点击右下角 "+添加集成"
+3. 搜索选择 "SmartIR Learn"
+
 
 ## 配置指南
 
