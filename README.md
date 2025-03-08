@@ -27,8 +27,10 @@
   - `自动扫描`：自动搜索局域网内博联设备
   - `手动输入`：直接输入设备IP地址
 
-### 第二步：设备学码
+### 第二步：点击配置按钮，进入设备选择
 <img width="409" alt="image" src="https://github.com/user-attachments/assets/c377c521-2995-4969-b0f7-f63f9d2d0c43" />
+
+<img width="403" alt="image" src="https://github.com/user-attachments/assets/b19309d6-d21d-4049-abdd-003c3d7a7419" />
 
 ```yaml
 示例选择：
@@ -40,6 +42,8 @@
 ```
 
 ### 第三步：指令学习
+<img width="408" alt="image" src="https://github.com/user-attachments/assets/b4a25fa8-5fb8-4874-ba29-93c4ccbf3386" />
+
 1. 从模板选择要学习的指令
 2. 按提示使用遥控器发送红外信号
 3. 自动保存学习到的指令代码
