@@ -2,7 +2,8 @@
 
 [中文](README.zh.md) | **English**
 
-<img width="495" alt="image" src="https://github.com/user-attachments/assets/42d12a32-5af2-4944-84d0-ec7864abaeee" />
+<img width="1206" alt="image" src="https://github.com/user-attachments/assets/6f19d3c2-31b2-49e5-a583-70bcfc2a954d" />
+
 
 A plugin to simplify SmartIR configuration file generation, automating IR code learning through Broadlink devices.
 
