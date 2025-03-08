@@ -22,12 +22,14 @@
 
 ### 第一步：设备连接
 <img width="415" alt="image" src="https://github.com/user-attachments/assets/7815a7c0-244d-48cd-ad4f-03964f571843" />
+
 - 选择设备发现方式：
   - `自动扫描`：自动搜索局域网内博联设备
   - `手动输入`：直接输入设备IP地址
 
 ### 第二步：设备学码
 <img width="409" alt="image" src="https://github.com/user-attachments/assets/c377c521-2995-4969-b0f7-f63f9d2d0c43" />
+
 ```yaml
 示例选择：
 设备类型: climate
