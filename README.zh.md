@@ -3,9 +3,12 @@
 
 **中文** | [English](README.md)
 
+本插件用于简化SmartIR配置文件的生成流程，通过博联（Broadlink）设备学习红外指令并自动生成兼容SmartIR的JSON配置文件。
+
 <img width="1206" alt="image" src="https://github.com/user-attachments/assets/466b3252-edea-4cac-b28e-cbb9f3840397" />
 
-本插件用于简化SmartIR配置文件的生成流程，通过博联（Broadlink）设备学习红外指令并自动生成兼容SmartIR的JSON配置文件。
+<img width="616" alt="image" src="https://github.com/user-attachments/assets/4bc2f01e-ab18-4f2b-a6db-5029106fe102" />
+
 
 ## 功能特性
 
