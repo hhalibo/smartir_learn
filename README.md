@@ -32,14 +32,6 @@
 
 <img width="403" alt="image" src="https://github.com/user-attachments/assets/b19309d6-d21d-4049-abdd-003c3d7a7419" />
 
-```yaml
-示例选择：
-设备类型: climate
-制造商: Midea
-型号: MS-05A1
-温度范围: 16-30℃
-模板选择: 标准模版
-```
 
 ### 第三步：指令学习
 <img width="408" alt="image" src="https://github.com/user-attachments/assets/b4a25fa8-5fb8-4874-ba29-93c4ccbf3386" />
