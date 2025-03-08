@@ -1,7 +1,8 @@
 from typing import Final
 
-DOMAIN: Final = "smartir_learn"
 MOCK_DATA: Final = False
+
+DOMAIN: Final = "smartir_learn"
 LEARN_TIMEOUT: Final = 30
 
 # 设备类型列表

@@ -32,9 +32,7 @@
                 "title": "学码配置",
                 "description": "为您的设备配置必要的信息",
                 "data": {
-                    "type": "设备类型",
-                    "manufacturer": "制造商",
-                    "models": "型号（用逗号分隔）"
+                    "type": "设备类型"
                 }
             },
             "template_and_temperature": {
@@ -47,10 +45,14 @@
                 }
             },
             "commands_step": {
-                "title": "学习指令列表",
-                "description": "请勾选需要学习的指令",
+                "title": "设备信息和指令列表",
+                "description": "请填写设备信息，勾选需要处理的指令",
                 "data": {
-                    "commands": "指令"
+                    "commands": "指令",
+                    "select_all": "✅ 全选所有指令",
+                    "deselect_all": "❌ 清空所有指令",
+                    "manufacturer": "制造商",
+                    "models": "型号（用逗号分隔）"
                 }
             },
             "select_existing_file": {
@@ -82,6 +84,39 @@
                     "command": "指令"
                 }
             },
+            "learn_ir_code_progres": {
+                "title": "学习指令红外码",
+                "description": "请先通过遥控器切换到 {command_pre}，然后点击提交",
+                "data": {
+                    "command": "指令"
+                }
+            },
+            "test_command": {
+                "title": "测试红外码指令",
+                "description": "测试指令：\n{command}\n\n指令值：\n{command_value}",
+                "data": {
+                    "test_result": "结果"
+                },
+                "options": {
+                    "test_result": {
+                        "pass": "通过",
+                        "fail": "未通过"
+                    }
+                }
+            },
+            "finish_failed_tests": {
+                "title": "未通过的指令",
+                "description": "以下是未通过测试的指令：\n{failed_commands}",
+                "data": {
+                    "retry_learning": "是否重新学习这些指令"
+                },
+                "options": {
+                    "retry_learning": {
+                        "yes": "是",
+                        "no": "否"
+                    }
+                }
+            },
             "finish": {
                 "title": "确认信息",
                 "description": "device_code:\n{device_code}\n\nSmartIR文件将存放到：\n{file_path}\n{file_contents}",
@@ -91,7 +126,7 @@
             }
         },
         "progress": {
-            "learn_ir_code_progres": "请拿起遥控器，按下 {command} 键..."
+            "learn_ir_code_progres": "请拿起遥控器，在30秒内按下 {command} 键..."
         }
     },
     "common": {
@@ -129,12 +164,12 @@
                 "fan_low": "低风扇",
                 "fan_medium": "中风扇",
                 "fan_mid": "中风扇",
-                "fan_only": "仅风扇模式",
+                "fan_only": "送风模式",
                 "fan_quiet": "安静风扇",
                 "feal": "感觉",
                 "feel": "感觉",
                 "hda": "高精度",
-                "heat": "加热模式",
+                "heat": "制热模式",
                 "heat_auto_": "自动加热",
                 "heat_cool": "冷热交替",
                 "hi-power": "高功率",
@@ -413,8 +448,9 @@
         "template_deal_mode": {
             "ref": "引用",
             "replace": "替换",
-            "delete": "删除",
-            "view": "查看"
+            "view": "查看",
+            "test": "验证",
+            "delete": "删除"
         }
     }
 }

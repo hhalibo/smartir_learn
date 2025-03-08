@@ -45,12 +45,12 @@
                 }
             },
             "commands_step": {
-                "title": "学习指令列表",
-                "description": "请勾选需要学习的指令",
+                "title": "设备信息和指令列表",
+                "description": "请填写设备信息，勾选需要处理的指令",
                 "data": {
                     "commands": "指令",
                     "select_all": "✅ 全选所有指令",
-                    "deselect_all": "❌ 清空所有选择",
+                    "deselect_all": "❌ 清空所有指令",
                     "manufacturer": "制造商",
                     "models": "型号（用逗号分隔）"
                 }
@@ -126,7 +126,7 @@
             }
         },
         "progress": {
-            "learn_ir_code_progres": "请拿起遥控器，按下 {command} 键..."
+            "learn_ir_code_progres": "请拿起遥控器，在30秒内按下 {command} 键..."
         }
     },
     "common": {
