@@ -18,10 +18,10 @@
    如果尚未安装 HACS，请先参考[官方文档](https://hacs.xyz/docs/setup/download)进行安装
 
 2. **添加自定义仓库**
-   - 进入 HACS 页面 ➡️ **集成**
+   - 进入 HACS 页面
    - 点击右上角 `⋮` ➡️ **自定义仓库**
    - 输入仓库 URL：`https://github.com/Seifon/smartir_learn`
-   - 分类选择 **Integration**
+   - 分类选择 **集成**
 
 3. **安装插件**
    - 在 HACS 的 **集成** 页面搜索 "SmartIR Learn"
