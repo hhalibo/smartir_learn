@@ -6,6 +6,8 @@ A plugin to simplify SmartIR configuration file generation, automating IR code l
 
 <img width="1206" alt="image" src="https://github.com/user-attachments/assets/466b3252-edea-4cac-b28e-cbb9f3840397" />
 
+<img width="1191" alt="image" src="https://github.com/user-attachments/assets/5f016d83-4216-4b31-9082-cb0032fd2560" />
+
 <img width="616" alt="image" src="https://github.com/user-attachments/assets/4bc2f01e-ab18-4f2b-a6db-5029106fe102" />
 
 
