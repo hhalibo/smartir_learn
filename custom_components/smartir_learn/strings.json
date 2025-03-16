@@ -92,8 +92,8 @@
                 }
             },
             "learn_single_command_failed": {
-                "title": "学习指令重试",
-                "description": "学习指令失败",
+                "title": "学习指令失败",
+                "description": "",
                 "data": {
                     "retry": "是否重试"
                 }
