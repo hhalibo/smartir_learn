@@ -1,5 +1,5 @@
 {
-    "title": "SmartIR Code Learning",
+    "title": "SmartIR Learning",
     "steps": {
         "user": {
             "title": "Setup Broadlink Device"
@@ -8,14 +8,14 @@
     "config": {
         "step": {
             "user": {
-                "title": "Configure Your Device",
-                "description": "Enter details of your Broadlink device.",
+                "title": "Setup Your Device",
+                "description": "Enter your Broadlink device details.",
                 "data": {
                     "device_ip": "Broadlink Device IP Address"
                 }
             },
             "manual_input": {
-                "title": "Configure Your Device",
+                "title": "Setup Your Device",
                 "description": "Please enter the device IP address",
                 "data": {
                     "device_ip": "Broadlink Device IP Address"
@@ -23,20 +23,20 @@
             }
         },
         "error": {
-            "invalid_device": "Invalid device IP. Please try again."
+            "invalid_device": "Invalid device IP, please try again."
         }
     },
     "options": {
         "step": {
             "device_configuration": {
-                "title": "Code Learning Configuration",
-                "description": "Configure essential information for your device",
+                "title": "Learning Configuration",
+                "description": "Configure necessary information for your device",
                 "data": {
                     "type": "Device Type"
                 }
             },
             "template_and_temperature": {
-                "title": "Code Learning Configuration",
+                "title": "Learning Configuration",
                 "description": "Select temperature range and template {message}",
                 "data": {
                     "min_temperature": "Minimum Temperature",
@@ -46,11 +46,11 @@
             },
             "commands_step": {
                 "title": "Device Info & Command List",
-                "description": "Fill device info and select commands to process",
+                "description": "Fill in device information and select commands to process",
                 "data": {
                     "commands": "Commands",
                     "select_all": "✅ Select All Commands",
-                    "deselect_all": "❌ Deselect All Commands",
+                    "deselect_all": "❌ Clear All Commands",
                     "manufacturer": "Manufacturer",
                     "models": "Models (comma-separated)"
                 }
@@ -65,35 +65,56 @@
             },
             "view_smartir_content": {
                 "title": "View SmartIR File",
-                "description": "File contents:\n{file_contents}",
+                "description": "File content:\n{file_contents}",
                 "data": {
 
                 }
             },
             "receive_ir_code": {
                 "title": "Receive IR Code",
-                "description": "Please ensure the device is sending the IR code for {command} and wait for reception.",
+                "description": "Ensure the device is sending IR code for {command} and wait for reception.",
                 "data": {
                     "command": "Command"
                 }
             },
             "learn_ir_code": {
                 "title": "Learn IR Code for Command",
-                "description": "Prepare to re-learn the IR code for command: {command}",
+                "description": "Prepare to learn IR code for command: {command}",
                 "data": {
                     "command": "Command"
                 }
             },
+            "learn_single_command_complete": {
+                "title": "Command Learning Result",
+                "description": "Result:\n{result}",
+                "data": {
+                    "command": "Command"
+                }
+            },
+            "learn_single_command_failed": {
+                "title": "Command learning failed",
+                "description": "",
+                "data": {
+                    "retry": "Retry?"
+                }
+            },
             "learn_ir_code_progres": {
                 "title": "Learn IR Code for Command",
-                "description": "First switch to {command_pre} via remote control, then click Submit",
+                "description": "First switch to {command_pre} via remote control, then click submit",
+                "data": {
+                    "command": "Command"
+                }
+            },
+            "learn_single_command_progress": {
+                "title": "Learn IR Code for Command",
+                "description": "Point the remote at the device and press the target button within 30 seconds...",
                 "data": {
                     "command": "Command"
                 }
             },
             "test_command": {
                 "title": "Test IR Code Command",
-                "description": "Test Command:\n{command}\n\nCommand Value:\n{command_value}",
+                "description": "Test command:\n{command}\n\nCommand value:\n{command_value}",
                 "data": {
                     "test_result": "Result"
                 },
@@ -126,7 +147,8 @@
             }
         },
         "progress": {
-            "learn_ir_code_progres": "Point the remote and press the {command} key within 30 seconds..."
+            "learn_ir_code_progres": "Press the {command} button on the remote within 30 seconds...",
+            "learn_single_command_progress": "Point the remote at the device and press the target button within 30 seconds..."
         }
     },
     "common": {

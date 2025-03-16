@@ -84,9 +84,30 @@
                     "command": "指令"
                 }
             },
+            "learn_single_command_complete": {
+                "title": "学习指令结果",
+                "description": "结果:\n{result}",
+                "data": {
+                    "command": "指令"
+                }
+            },
+            "learn_single_command_failed": {
+                "title": "学习指令重试",
+                "description": "学习指令失败",
+                "data": {
+                    "retry": "是否重试"
+                }
+            },
             "learn_ir_code_progres": {
                 "title": "学习指令红外码",
                 "description": "请先通过遥控器切换到 {command_pre}，然后点击提交",
+                "data": {
+                    "command": "指令"
+                }
+            },
+            "learn_single_command_progress": {
+                "title": "学习指令红外码",
+                "description": "请拿起遥控器，对准设备，在30秒内按下需要学习的按键...",
                 "data": {
                     "command": "指令"
                 }
@@ -126,7 +147,8 @@
             }
         },
         "progress": {
-            "learn_ir_code_progres": "请拿起遥控器，在30秒内按下 {command} 键..."
+            "learn_ir_code_progres": "请拿起遥控器，在30秒内按下 {command} 键...",
+            "learn_single_command_progress": "请拿起遥控器，对准设备，在30秒内按下需要学习的按键..."
         }
     },
     "common": {

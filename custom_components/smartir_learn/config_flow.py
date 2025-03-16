@@ -494,23 +494,21 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def async_step_learn_single_command_failed(self, user_input=None):
+        if user_input is not None:
+            """处理重试选项"""
+            if user_input["retry"] == "yes":
+                return await self.async_step_learn_single_command_progress()
+            return await self.async_step_device_configuration()
+
         """学习失败处理"""
         return self.async_show_form(
-            step_id="learn_single_command_retry",
+            step_id="learn_single_command_failed",
             description_placeholders={"error": "学习超时或未接收到信号"},
             data_schema=vol.Schema({
-                vol.Required("retry"): vol.In(["retry", "abort"])
+                vol.Required("retry"): vol.In(["yes", "no"])
             }),
             errors={}
         )
-
-    async def async_step_learn_single_command_retry(self, user_input=None):
-        """处理重试选项"""
-        if user_input["retry"] == "retry":
-            return await self.async_step_learn_single_command_progress()
-        return self.async_abort(reason="learning_aborted")
-    
-
 
     def get_smartir_directory(self):
             """获取 SmartIR 目录路径"""

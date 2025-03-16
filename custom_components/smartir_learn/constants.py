@@ -10,7 +10,8 @@ DEVICE_TYPES: Final = {
     "climate": "Climate",
     "media_player": "Media Player",
     "fan": "Fan",
-    "light": "Light"
+    "light": "Light",
+    "single": "Single"
 }
 
 # Translation Keys
