@@ -403,6 +403,21 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
             # 更新设备数据
             self.device_data.update(user_input)
 
+            # 如果是 single 类型，直接进入学习模式
+            if user_input.get("type") == "single":
+                # 获取设备 IP，连接设备并保存
+                device_ip = self.device_data.get("device_ip")
+                device, error = validate_device_ip(device_ip)
+                if error:
+                    errors["type"] = error
+                    return self.async_show_form(
+                        step_id="device_configuration",
+                        data_schema=CONFIGURE_SCHEMA,
+                        errors=errors
+                    )
+                self.device = device
+                return await self.async_step_learn_single_command_progress()
+
             # 获取设备 IP，连接设备并保存
             device_ip = self.device_data.get("device_ip")
             device, error = validate_device_ip(device_ip)
@@ -424,6 +439,78 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=CONFIGURE_SCHEMA,
             errors=errors
         )
+
+
+    # 添加新的步骤处理单个指令学习
+    async def async_step_learn_single_command_progress(self, user_input=None):
+        """学习单个红外指令"""
+        errors = {}
+        if self.progress_task is None:
+            # 创建一个异步任务来执行 IR 码学习
+            self.progress_task = self.hass.async_create_task(self.async_learn_single_command())
+        
+        if not self.progress_task.done():
+            return self.async_show_progress(
+                step_id=f"learn_single_command_progress",
+                progress_action=f"learn_single_command_progress",
+                progress_task=self.progress_task,
+                description_placeholders={
+                    "command": f'<b></b>'
+                }
+            )
+        
+        # 处理学习结果
+        learned_code = await self.progress_task
+
+        self.progress_task = None
+        if learned_code:
+            return self.async_show_progress_done(next_step_id="learn_single_command_complete")
+        else:
+            return self.async_show_progress_done(next_step_id="learn_single_command_failed")
+
+    async def async_learn_single_command(self, user_input=None):
+        """执行学习单个指令的异步任务"""
+        try:
+            # 调用 receive_ir_code 方法来接收 IR 码
+            ir_code = await self.receive_ir_code()
+            self.device_data["ir_code"] = ir_code
+            return ir_code
+        except Exception as e:
+            _LOGGER.error(f"学习失败: {str(e)}")
+            return None
+
+    async def async_step_learn_single_command_complete(self, user_input=None):
+        if user_input is not None:
+            return await self.async_step_device_configuration()
+
+        """显示学习结果"""
+        return self.async_show_form(
+            step_id="learn_single_command_complete",
+            description_placeholders={
+                "result": f'`{self.device_data["ir_code"]}`'
+            },
+            data_schema=vol.Schema({}),
+            last_step=True
+        )
+
+    async def async_step_learn_single_command_failed(self, user_input=None):
+        """学习失败处理"""
+        return self.async_show_form(
+            step_id="learn_single_command_retry",
+            description_placeholders={"error": "学习超时或未接收到信号"},
+            data_schema=vol.Schema({
+                vol.Required("retry"): vol.In(["retry", "abort"])
+            }),
+            errors={}
+        )
+
+    async def async_step_learn_single_command_retry(self, user_input=None):
+        """处理重试选项"""
+        if user_input["retry"] == "retry":
+            return await self.async_step_learn_single_command_progress()
+        return self.async_abort(reason="learning_aborted")
+    
+
 
     def get_smartir_directory(self):
             """获取 SmartIR 目录路径"""
@@ -856,6 +943,7 @@ class SmartirLearnOptionsFlowHandler(config_entries.OptionsFlow):
             return await self.async_step_learn_ir_code_progres()
 
         # 如果没有指令需要学习，跳转到完成步骤
+        self.progress_task = None
         return await self.async_step_finish()
 
 
